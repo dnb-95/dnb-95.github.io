@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YMJTRWHEK8"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-YMJTRWHEK8');
+</script>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://cdn.jsdelivr.net https://cdn.onesignal.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com; form-action 'self';">
+<title>DnB Reviz</title>
+<meta property="og:title" content="DnB Reviz" />
+<meta property="og:image" content="https://iili.io/CR2iW9n.png" />
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DnB Reviz — Plateforme de révision créer entièrement par Bouillet Dan et Hounnouvi Jayden">
+<meta name="twitter:description" content="Partage tes fiches, teste tes connaissances avec l'IA et réussis tes examens avec la communauté DnB Reviz !">
+<meta name="twitter:image" content="https://iili.io/CR2iW9n.png">
+<meta property="og:type" content="website" />
+<meta name="keywords" content="révisions, fiches de révision, bac, quiz IA, cours en ligne, entraide lycéens, dnb reviz, réviser gratuitement">
+<link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="DnB Reviz">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="https://i.ibb.co/tPpXJLTz/Dn-BChrome.png">
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.dnbOneSignalReady = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("ONESIGNAL_TIMEOUT")), 30000);
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      try {
+        await OneSignal.init({
+          appId: "d0900059-082b-458f-9bb1-8798546b8010"
+        });
+        clearTimeout(timeout);
+        resolve(OneSignal);
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+  });
+</script>
+<script>
+  try {
+    if (window.top !== window.self) window.top.location = window.self.location.href;
+  } catch (_) {}
+</script>
+<link rel="stylesheet" href="styles.css">
+
+<div id="cookie-banner" class="cookie-banner" style="display: none;">
+  <div class="cookie-text">
+    <strong>🍪 À propos des cookies :</strong> Ce site utilise Google Analytics pour analyser le trafic (nombre de visiteurs, temps passé sur les révisions, etc.) afin d'améliorer la plateforme pour tout le monde.
+  </div>
+  <div class="cookie-actions">
+    <button class="btn-ghost btn-sm" onclick="handleCookies(true)">Refuser</button>
+    <button class="btn-pill btn-sm" onclick="handleCookies(true)">Accepter</button>
+  </div>
+</div>
+
+<div id="view-maintenance" class="maintenance-screen">
+  <div class="maintenance-box">
+    <div class="maintenance-icon">🛠️</div>
+    <h1>Site en maintenance</h1>
+    <p id="maintenance-message">DnB Reviz est actuellement en maintenance. Nous serons de retour très bientôt, merci de ta patience !</p>
+    <button class="btn-pill" style="width:100%;justify-content:center;padding:13px" onclick="handleLogout()">Se déconnecter</button>
+  </div>
+</div>
+<div id="maintenance-admin-banner" class="maintenance-admin-banner">🛠️ Mode maintenance activé — seuls les admins ont accès au site</div>
+
+<div id="view-login" class="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="Logo DnB Reviz">
+      <h1>DnB Reviz</h1>
+      <p>Avant-première - bêta.</p>
+      <p class="login-trust-note">Application scolaire indépendante créée par Dan Bouillet. Ce site n'est pas une page de connexion Google, Microsoft ou ENT.</p>
+    </div>
+    <div class="input-group">
+      <label>Identifiant</label>
+      <input type="text" id="login-id" placeholder="prenom.nom" autocomplete="username">
+    </div>
+    <div class="input-group">
+      <label>Mot de passe DnB Reviz</label>
+      <input type="password" id="login-pwd" placeholder="Ton mot de passe DnB Reviz" autocomplete="current-password" aria-describedby="login-security-note">
+      <p id="login-security-note" class="caption mt-1">N’utilise pas le mot de passe d’un autre service. Ton compte DnB Reviz est créé par l’administrateur.</p>
+    </div>
+    <button onclick="handleLogin()" class="btn-pill mt-2" style="width:100%;justify-content:center;padding:13px">Se connecter</button>
+    <p class="caption mt-2" style="text-align:center">Si tu n'as pas de compte, contactez nous.</p>
+  </div>
+</div>
+
+<div id="view-app" style="display:none">
+
+  <header>
+    <button class="hamburger" id="hamburger-btn" onclick="toggleDrawer()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <a href="#accueil" class="header-left">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="DnB">
+      <span class="brand">DnB <span>Reviz</span></span>
+    </a>
+    <nav class="header-center">
+      <button class="nav-tab active"  data-target="accueil"   onclick="switchTab('accueil')">Accueil</button>
+      <button class="nav-tab"         data-target="cours"     onclick="switchTab('cours')">Cours</button>
+      <button class="nav-tab"         data-target="fichesrev" onclick="switchTab('fichesrev')">Fiches &amp; Révisions</button>
+      <button class="nav-tab"         data-target="quiz"      onclick="switchTab('quiz')">Quiz</button>
+      <button class="nav-tab"         data-target="messages"  onclick="switchTab('messages')">Messages <span class="nav-unread-dot"></span></button>
+      <button class="nav-tab hidden"  data-target="depot"     id="tab-depot" onclick="switchTab('depot')">Déposer un cours</button>
+      <button class="nav-tab hidden"  data-target="creerquiz" id="tab-creer-quiz" onclick="switchTab('creerquiz')">Créer un quiz</button>
+      <button class="nav-tab hidden admin-only" data-target="admin" id="tab-admin" onclick="switchTab('admin')">Admin</button>
+      <button class="nav-tab hidden admin-only" data-target="statistiques" id="tab-statistiques" onclick="switchTab('statistiques')">Statistiques</button>
+    </nav>
+    <div class="header-right">
+      <div class="avatar-btn" id="nav-avatar" onclick="toggleDropdown()">
+        <span id="nav-initials">?</span>
+        <img id="nav-av-img" alt="">
+      </div>
+      <div class="dropdown" id="profil-dropdown">
+        <div class="drop-head">
+          <div class="drop-name" id="drop-name">…</div>
+          <span class="role-badge" id="drop-role">…</span>
+        </div>
+        <button onclick="switchTab('profil');closeDropdown()">👤 Mon profil</button>
+        <button onclick="goToMyLikes();closeDropdown()">❤️ Mes likes</button>
+        <button onclick="switchTab('setting');closeDropdown()">⚙️ Paramètres</button>
+        <hr>
+        <button class="red" onclick="handleLogout()">Se déconnecter</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mob-drawer" id="mob-drawer">
+    <div class="mob-drawer-bg" onclick="closeDrawer()"></div>
+    <div class="mob-drawer-panel">
+      <div class="drawer-head">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="DnB">
+        <span class="brand">DnB <span>Reviz</span></span>
+      </div>
+      <div class="drawer-nav" id="drawer-nav">
+        <button class="drawer-btn active" data-tab="accueil" onclick="switchTab('accueil');closeDrawer()">
+          <span class="d-icon">🏠</span> Accueil
+        </button>
+        <button class="drawer-btn" data-tab="cours" onclick="switchTab('cours');closeDrawer()">
+          <span class="d-icon">📖</span> Cours
+        </button>
+        <button class="drawer-btn" data-tab="fichesrev" onclick="switchTab('fichesrev');closeDrawer()">
+          <span class="d-icon">📝</span> Fiches &amp; Rév.
+        </button>
+        <button class="drawer-btn" data-tab="quiz" onclick="switchTab('quiz');closeDrawer()">
+          <span class="d-icon">🎯</span> Quiz
+        </button>
+        <button class="drawer-btn" data-tab="messages" onclick="switchTab('messages');closeDrawer()">
+          <span class="d-icon">💬</span> Messages <span class="nav-unread-dot"></span>
+        </button>
+        <button class="drawer-btn hidden" id="drawer-depot" data-tab="depot" onclick="switchTab('depot');closeDrawer()">
+          <span class="d-icon">➕</span> Déposer un cours
+        </button>
+        <button class="drawer-btn hidden" id="drawer-creer-quiz" data-tab="creerquiz" onclick="switchTab('creerquiz');closeDrawer()">
+          <span class="d-icon">✨</span> Créer un quiz
+        </button>
+        <button class="drawer-btn hidden admin-only" id="drawer-admin" data-tab="admin" onclick="switchTab('admin');closeDrawer()">
+          <span class="d-icon">🛠️</span> Administration
+        </button>
+        <button class="drawer-btn hidden admin-only" id="drawer-statistiques" data-tab="statistiques" onclick="switchTab('statistiques');closeDrawer()">
+          <span class="d-icon">📈</span> Statistiques
+        </button>
+      </div>
+      <div class="drawer-foot">
+        <div class="drawer-user">
+          <div class="drawer-av" id="drawer-av">
+            <span id="drawer-initials">?</span>
+            <img id="drawer-av-img" alt="">
+          </div>
+          <div class="drawer-user-info">
+            <div class="drawer-user-name" id="drawer-name">…</div>
+            <div class="drawer-user-role" id="drawer-role">…</div>
+          </div>
+        </div>
+        <button class="drawer-btn" onclick="switchTab('profil');closeDrawer()">
+          <span class="d-icon">👤</span> Mon profil
+        </button>
+        <button class="drawer-btn" onclick="goToMyLikes();closeDrawer()">
+          <span class="d-icon">❤️</span> Mes likes
+        </button>
+        <button class="drawer-btn" onclick="switchTab('setting');closeDrawer()">
+          <span class="d-icon">⚙️</span> Paramètres
+        </button>
+        <button class="drawer-btn" style="color:var(--danger)" onclick="handleLogout()">
+          <span class="d-icon">🚪</span> Se déconnecter
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+    <section id="page-accueil" class="page-view active">
+      <div class="ph-row" style="margin-bottom: 20px;">
+        <div>
+          <h1>Accueil</h1>
+          <p class="tagline">Bienvenue sur DnB Reviz.</p>
+        </div>
+        <button class="btn-pill-van admin-only hidden" onclick="openModal('m-add-mat')">+ Ajouter une matière</button>
+      </div>
+      
+      <div class="home-streak-card" id="home-streak-card">
+        <div class="home-streak-visual" aria-hidden="true">
+          <div class="duo-flame duo-flame-main">
+            <span class="duo-flame-layer duo-flame-outer"></span>
+            <span class="duo-flame-layer duo-flame-middle"></span>
+            <span class="duo-flame-layer duo-flame-inner"></span>
+          </div>
+        </div>
+        <div class="home-streak-copy">
+          <div class="home-streak-kicker">Ta série</div>
+          <div class="home-streak-title">
+            <span id="home-streak-count">0 jour</span>
+          </div>
+          <button type="button" class="home-streak-ranking-link" id="home-streak-rank" onclick="openStreakRanking()">
+            #— au classement
+          </button>
+          <div class="home-streak-status" id="home-streak-status" aria-live="polite">Ta flamme se prépare…</div>
+          <div class="streak-extinguish-message" aria-live="assertive"></div>
+        </div>
+        <button type="button" class="home-streak-open" onclick="openStreakRanking()" aria-label="Ouvrir le classement">
+          →
+        </button>
+      </div>
+
+      <div id="pinned-annonces-zone"></div>
+      
+      <div class="quick-nav-grid">
+        <div class="quick-nav-card" onclick="switchTab('cours')">
+          <span class="quick-nav-icon">📖</span>
+          <span>Cours</span>
+        </div>
+        <div class="quick-nav-card" onclick="switchTab('fichesrev')">
+          <span class="quick-nav-icon">📝</span>
+          <span>Révisions</span>
+        </div>
+        <div class="quick-nav-card" onclick="switchTab('quiz')">
+          <span class="quick-nav-icon">🎯</span>
+          <span>Quiz</span>
+        </div>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:28px; margin-bottom:12px;">
+        <h2>Matières</h2>
+        <span class="caption">Fais défiler &amp; clique pour filtrer →</span>
+      </div>
+      <div class="slider-matieres-wrap">
+        <div class="slider-matieres" id="matieres-grid"></div>
+      </div>
+
+      <div id="annonces-zone" class="mt-4"></div>
+    </section>
+
+    <section id="page-classement" class="page-view">
+      <div class="ph-row streak-ranking-header">
+        <div>
+          <h1>Classement des flammes</h1>
+          <p class="tagline" id="streak-ranking-scope">Ta classe</p>
+        </div>
+        <button class="btn-ghost" type="button" onclick="switchTab('accueil')">← Accueil</button>
+      </div>
+
+      <div class="streak-ranking-card">
+        <div class="streak-ranking-card-head">
+          <div>
+            <div class="caption">Série actuelle</div>
+            <h3>Qui garde la flamme ?</h3>
+          </div>
+          <div class="streak-ranking-header-flame" aria-hidden="true">
+            <span class="streak-mini-flame streak-mini-flame-large"></span>
+          </div>
+        </div>
+        <div id="streak-ranking-list" class="streak-ranking-list"></div>
+      </div>
+    </section>
+
+    <section id="page-cours" class="page-view">
+      <div class="ph-row">
+        <div>
+          <h1>Cours</h1>
+          <p class="tagline">Consulte les cours partagés.</p>
+        </div>
+        <button class="btn-pill-van" onclick="openFilterModal('cours')">⚙️ Filtres</button>
+      </div>
+      <div class="feed-wrap" id="cours-feed"></div>
+    </section>
+
+    <section id="page-fichesrev" class="page-view">
+      <div class="ph-row">
+        <div>
+          <h1>Fiches &amp; Révisions</h1>
+          <p class="tagline">Retrouve les fiches de révisions.</p>
+        </div>
+        <button class="btn-pill-van" onclick="openFilterModal('fichesrev')">⚙️ Filtres</button>
+      </div>
+      <div class="feed-wrap" id="fr-feed"></div>
+    </section>
+
+    <section id="page-quiz" class="page-view">
+      <div class="ph-row">
+        <div>
+          <h1>Quiz</h1>
+          <p class="tagline">Teste tes connaissances.</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button class="btn-pill" onclick="openModal('m-ia-quiz')">✨ Créer un quiz avec l'IA</button>
+          <button class="btn-pill-van" onclick="openFilterModal('quiz')">⚙️ Filtres</button>
+        </div>
+      </div>
+      <div class="feed-wrap" id="quiz-feed"></div>
+    </section>
+
+    <section id="page-creerquiz" class="page-view">
+      <h1>Créer un Quiz</h1>
+      <p class="tagline">Prépare un test pour toute la classe (max 50 questions)</p>
+      <div class="depot-wrap">
+        <div class="input-group">
+          <label>Titre du Quiz *</label>
+          <input type="text" id="quiz-create-title" placeholder="Ex : Les bases du Droit">
+        </div>
+        <div class="input-group">
+          <label>Matière *</label>
+          <select id="quiz-create-matiere"></select>
+        </div>
+        <div class="input-group">
+          <label>Description (facultatif)</label>
+          <textarea id="quiz-create-desc" placeholder="Ce qu'il faut savoir avant de commencer…"></textarea>
+        </div>
+        <div class="input-group">
+          <label>Tag</label>
+          <div class="tag-option-group">
+            <label class="tag-option">
+              <input type="checkbox" id="quiz-create-tag-bac" value="bac">
+              <span>🎓 Bac</span>
+            </label>
+          </div>
+        </div>
+        
+        <div id="quiz-questions-container" style="margin-top:24px; display:flex; flex-direction:column; gap:20px;">
+        </div>
+        
+        <button class="btn-ghost mt-2" style="width:100%; border:2px dashed var(--hl); padding:14px; font-weight:600;" onclick="addQuizQuestionField()">+ Ajouter une question</button>
+
+        <button class="btn-pill mt-4" onclick="handleCreateManualQuiz()" style="width:100%;justify-content:center;padding:13px">
+          Publier le Quiz
+        </button>
+      </div>
+    </section>
+
+    <section id="page-messages" class="page-view">
+      <div class="ph-row" style="margin-bottom:12px;">
+        <div>
+          <h1>Messages</h1>
+        </div>
+      </div>
+      <div class="dm-layout">
+        <div class="dm-sidebar" id="dm-sidebar">
+          <div class="dm-sidebar-head">
+            <h3 style="font-size:18px">Discussions</h3>
+            <button class="btn-pill-van btn-sm" onclick="openModal('m-new-chat')">➕ Nouveau</button>
+          </div>
+          <div class="dm-contacts" id="dm-contacts-list">
+             <div class="empty-text">Aucune discussion</div>
+          </div>
+        </div>
+        <div class="dm-chat hide-mobile" id="dm-chat-area">
+          <div class="dm-chat-head" id="dm-chat-head">
+            <button class="dm-back-btn" onclick="backToDMSidebar()">←</button>
+            <div style="display:flex; align-items:center; gap:12px; flex:1; cursor:pointer;" onclick="openCurrentDMProfile()" title="Voir le profil">
+              <div class="drawer-av" style="width:38px;height:38px;"><span id="dm-active-init"></span><img id="dm-active-av" alt=""></div>
+              <div style="flex:1;min-width:0;">
+                 <div style="font-weight:600;font-size:16px; display:flex; align-items:center; gap:4px;" id="dm-active-name">Sélectionne une discussion</div>
+                 <div class="caption" id="dm-active-role"></div>
+              </div>
+            </div>
+          </div>
+          <div class="dm-chat-msgs" id="dm-msgs-box"></div>
+          <form class="dm-chat-foot" id="dm-form" onsubmit="handleSendDM(event)" style="display:none;">
+            <div class="dm-input-row">
+              <label class="dm-upload-btn">
+                📎
+                <input type="file" id="dm-file-input" style="display:none;" onchange="handleDMFile(event)">
+              </label>
+              <input type="text" id="dm-text-input" placeholder="Écris un message..." autocomplete="off">
+              <button type="submit" class="btn-pill" style="padding:10px 18px">Envoyer</button>
+            </div>
+            <div id="dm-file-preview" style="font-size:12px;margin-top:6px;display:none;color:var(--primary);font-weight:500;"></div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-depot" class="page-view">
+      <h1>Partager un cours</h1>
+      <p class="tagline">Ajoute jusqu'à 5 fichiers pour toute la classe</p>
+      <div class="depot-wrap">
+        <div class="input-group">
+          <label>Titre du document *</label>
+          <input type="text" id="post-title" placeholder="Ex : Chapitre 3 — Le contrat de travail" maxlength="50">
+          <div class="caption" style="text-align:right; margin-top:4px;">
+            <span id="title-counter">0</span>/50 caractères
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Catégorie *</label>
+          <select id="post-type" onchange="handlePostTypeChange()">
+            <option value="cours">Cours</option>
+            <option value="fiches">Fiche mémo</option>
+            <option value="revisions">Révisions</option>
+            <option value="annonce" class="admin-only hidden">Annonce (Épinglée en haut de l'accueil)</option>
+          </select>
+        </div>
+        <div class="input-group" id="group-post-matiere">
+          <label>Matière *</label>
+          <select id="post-matiere"></select>
+        </div>
+        <div class="input-group admin-only hidden" id="group-post-announcement-visibility" style="display:none;">
+          <label>Visibilité de l'annonce épinglée</label>
+          <select id="post-announcement-visibility">
+            <option value="tous">Tout le monde</option>
+            <option value="eleves">Uniquement les élèves</option>
+            <option value="professeurs">Uniquement les professeurs</option>
+          </select>
+        </div>
+        <div class="input-group depot-description-group">
+          <label>Description (facultatif)</label>
+          <textarea id="post-desc" aria-hidden="true" tabindex="-1"></textarea>
+          <div id="post-desc-editor" class="richtext-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Un mot sur ce document…"></div>
+          <div id="post-desc-toolbar" class="richtext-toolbar hidden" aria-label="Mise en forme de la description">
+            <button type="button" title="Gras" aria-label="Gras" onclick="applyRichTextCommand('bold')">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h6.1a4.1 4.1 0 0 1 2.3 7.5A4.4 4.4 0 0 1 13.8 21H7V5Zm3 3v3h3a1.5 1.5 0 0 0 0-3h-3Zm0 6v4h3.5a2 2 0 0 0 0-4H10Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" title="Italique" aria-label="Italique" onclick="applyRichTextCommand('italic')">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5h9v3h-3.3l-3.4 8H16v3H7v-3h3.3l3.4-8H10V5Z" fill="currentColor"/></svg>
+            </button>
+            <button type="button" title="Souligné" aria-label="Souligné" onclick="applyRichTextCommand('underline')">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v7.2a2.4 2.4 0 0 0 4.8 0V5h3v7.3a5.4 5.4 0 0 1-10.8 0V5ZM6 20h12v2H6v-2Z" fill="currentColor"/></svg>
+            </button>
+            <div class="richtext-color-wrap">
+              <button type="button" title="Couleur du texte" aria-label="Couleur du texte" onclick="toggleRichTextColorMenu()">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5h7.6l1.7 3.2-1.8 1-1-1.7H9.3l-1 1.7-1.8-1L8.2 5Z" fill="currentColor"/><path d="M6 11h12l-2 7H8l-2-7Zm3 7v3h6v-3H9Z" fill="currentColor" opacity=".65"/><path d="M17.5 3.5c.9-.9 2.3-.9 3.2 0 .6.6.6 1.6 0 2.2l-2.2 2.2-3.2-3.2 2.2-1.2Z" fill="currentColor"/></svg>
+              </button>
+              <div id="post-desc-color-palette" class="richtext-color-palette hidden">
+                <button type="button" class="richtext-color-swatch" aria-label="Violet" style="--swatch:#8b5cf6" onclick="applyRichTextColor('#8b5cf6')"></button>
+                <button type="button" class="richtext-color-swatch" aria-label="Bleu" style="--swatch:#2563eb" onclick="applyRichTextColor('#2563eb')"></button>
+                <button type="button" class="richtext-color-swatch" aria-label="Vert" style="--swatch:#16a34a" onclick="applyRichTextColor('#16a34a')"></button>
+                <button type="button" class="richtext-color-swatch" aria-label="Orange" style="--swatch:#ea580c" onclick="applyRichTextColor('#ea580c')"></button>
+                <button type="button" class="richtext-color-swatch" aria-label="Rouge" style="--swatch:#dc2626" onclick="applyRichTextColor('#dc2626')"></button>
+                <button type="button" class="richtext-color-swatch" aria-label="Noir" style="--swatch:#111827" onclick="applyRichTextColor('#111827')"></button>
+              </div>
+            </div>
+          </div>
+          <div class="caption" style="text-align:right; margin-top:4px;">
+            <span id="desc-counter">0</span>/350 caractères
+          </div>
+        </div>
+        <div class="input-group" id="group-post-tags">
+          <label>Tags</label>
+          <div class="tag-option-group">
+            <label class="tag-option">
+              <input type="checkbox" name="post-tag" value="bac">
+              <span>🎓 Bac</span>
+            </label>
+            <label class="tag-option">
+              <input type="checkbox" name="post-tag" value="exercices">
+              <span>📝 Exercices</span>
+            </label>
+            <label class="tag-option">
+              <input type="checkbox" name="post-tag" value="information">
+              <span>ℹ️ Information</span>
+            </label>
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Fichiers (jusqu'à 5)</label>
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="post-file" multiple onchange="handleFileSelect(event)">
+            <div style="font-size:30px;margin-bottom:8px">📎</div>
+            <div style="font-size:14px;font-weight:500;color:var(--ink-m)">Glisse ici ou <span style="color:var(--primary);font-weight:600">parcourir</span></div>
+            <p class="caption mt-1">Tous types de fichiers — max 5 fichiers (25 Mo au total)</p>
+          </div>
+          <div class="file-prev" id="file-prev" style="flex-direction:column; align-items:stretch; gap:6px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div><span id="file-prev-icon">📁</span> <span id="file-prev-name"></span></div>
+              <button type="button" onclick="clearFile()" style="background:transparent;color:var(--ink-m);font-size:14px;cursor:pointer;">✕ Tout retirer</button>
+            </div>
+            <div id="file-prev-list" style="font-size:12px; color:var(--ink-m); max-height:100px; overflow-y:auto; padding-top:4px; border-top:1px solid rgba(0,0,0,0.05);"></div>
+          </div>
+        </div>
+        <div class="or-div">ou</div>
+        <div class="input-group">
+          <label>Lien externe (Drive, PDF en ligne…)</label>
+          <input type="url" id="post-url" placeholder="YouTube, Drive, PDF en ligne…">
+        </div>
+        <button class="btn-pill mt-2" onclick="handleCreatePost()" style="width:100%;justify-content:center;padding:13px">
+          Partager avec la classe
+        </button>
+      </div>
+    </section>
+
+    <section id="page-pub-profil" class="page-view">
+      <div id="pub-loading-overlay" style="display:none; justify-content:center; padding:60px;">
+        <div class="spinner"></div>
+      </div>
+      <div id="pub-content-wrapper">
+        <div class="pub-banner-zone" id="pub-banner"></div>
+        <div class="pub-chassis">
+          <div class="pub-av-overlap">
+            <div class="pub-av-big" id="pub-av">
+              <span id="pub-av-init">?</span>
+              <img id="pub-av-img" alt="">
+            </div>
+            <div class="pub-actions-right">
+              <div class="contrib-pill-top">
+                <span>📁</span>
+                <strong id="pub-cnt-contribs-top">0</strong>
+                <span>contributions</span>
+              </div>
+              <button class="btn-pill" id="pub-follow-btn" onclick="toggleFollowCurrentProfile()">S'abonner</button>
+            </div>
+          </div>
+          <div class="pub-main-info">
+            <div class="pub-name-line">
+              <h1 id="pub-name">...</h1>
+              <span class="rbadge" id="pub-role">...</span>
+            </div>
+            <div class="pub-uname">@<span id="pub-id">...</span></div>
+            <p class="pub-bio" id="pub-bio">Aucune biographie.</p>
+            <div class="pub-metrics">
+              <span onclick="openFollowersModal('followers')"><strong id="pub-cnt-followers">0</strong> abonnés</span>
+              <span onclick="openFollowersModal('following')"><strong id="pub-cnt-following">0</strong> abonnements</span>
+            </div>
+            <div class="pub-social-row" id="pub-socials"></div>
+          </div>
+        </div>
+        
+        <div class="tiktok-tabs" id="pub-tiktok-tabs">
+          <button class="tk-tab active" data-ptab="cours" onclick="switchPubTab('cours')">Publications</button>
+          <button class="tk-tab" data-ptab="quiz" onclick="switchPubTab('quiz')">Quiz</button>
+          <button class="tk-tab" data-ptab="quiz-ia" onclick="switchPubTab('quiz-ia')">Quiz IA</button>
+          <button class="tk-tab" data-ptab="likes" onclick="switchPubTab('likes')">❤️ Likes</button>
+        </div>
+
+        <div style="margin:28px 0 16px" id="pub-filter-container">
+          <div class="filter-bar" id="pub-subj-filter-bar"></div>
+        </div>
+        
+        <div id="pub-tab-cours" class="pub-tab-content">
+          <div class="feed-wrap" id="pub-feed"></div>
+        </div>
+        
+        <div id="pub-tab-quiz" class="pub-tab-content" style="display:none;">
+          <div class="feed-wrap" id="pub-quiz-feed"></div>
+        </div>
+
+        <div id="pub-tab-quiz-ia" class="pub-tab-content" style="display:none;">
+          <div class="feed-wrap" id="pub-quiz-ia-feed"></div>
+        </div>
+        
+        <div id="pub-tab-likes" class="pub-tab-content" style="display:none;">
+          <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+            <select id="pub-likes-sort" style="background:var(--input-bg);border:1px solid var(--input-b);border-radius:10px;padding:8px 12px;font-size:14px;color:var(--ink);cursor:pointer;outline:none;" onchange="renderPubLikes()">
+              <option value="recent">Les plus récents</option>
+              <option value="oldest">Les plus anciens</option>
+            </select>
+          </div>
+          <div class="feed-wrap" id="pub-likes-feed"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-profil" class="page-view">
+      <h1>Mon profil</h1>
+      <p class="tagline">Gère ton image, ta bio et tes informations</p>
+      <div class="prof-grid">
+        <div class="prof-left">
+          <div class="prof-av-preview" id="prof-av-preview">
+            <span id="prof-initials">?</span>
+            <img id="prof-av-img" alt="">
+          </div>
+          <label class="btn-ghost" style="cursor:pointer;margin-top:8px;">
+            📷 Changer la photo
+            <input type="file" accept="image/*" id="input-avatar" style="display:none" onchange="uploadAvatar(event)">
+          </label>
+          <button class="btn-utility" style="margin-top:12px; width:100%;" onclick="window.location.hash = '#' + currentUser.username">👁️ Voir mon profil public</button>
+          <div class="stat-box" style="margin-top:12px;">
+            <p class="caption">CONTRIBUTIONS</p>
+            <div class="stat-val" id="contrib-count">0</div>
+            <p class="caption">documents partagés</p>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:20px">Informations</h3>
+          <div class="input-group">
+            <label>Identifiant (non modifiable)</label>
+            <input type="text" id="prof-id" readonly style="opacity:.5;cursor:not-allowed">
+          </div>
+          <div class="input-group">
+            <label>Nom d'affichage</label>
+            <input type="text" id="prof-display" placeholder="Ton prénom et nom">
+          </div>
+          <div class="input-group">
+            <label>Biographie</label>
+            <textarea id="prof-bio-input" placeholder="Parle de tes spécialités, de ce que tu révises... (Les Admins peuvent mentionner des membres avec @pseudo)"></textarea>
+          </div>
+          <div class="input-group">
+            <label>Établissement</label>
+            <input type="text" id="prof-etab" disabled style="opacity:.7; cursor:not-allowed;" placeholder="Attribué par l'admin">
+          </div>
+          <div class="input-group">
+            <label>Classe</label>
+            <input type="text" id="prof-classe" disabled style="opacity:.7; cursor:not-allowed;" placeholder="Attribuée par l'admin">
+          </div>
+          <div class="input-group">
+            <label>Compte Instagram</label>
+            <input type="text" id="prof-insta-input" placeholder="ex: @username">
+          </div>
+          <div class="input-group">
+            <label>Lien LinkedIn</label>
+            <input type="url" id="prof-linkedin-input" placeholder="https://www.linkedin.com/in/...">
+          </div>
+          
+          <div class="input-group admin-only hidden" id="group-tiktok">
+            <label>Compte TikTok (Admin uniquement)</label>
+            <input type="text" id="prof-tiktok-input" placeholder="ex: @username">
+          </div>
+          
+          <div class="input-group">
+            <label>Bannière de profil (Image ou GIF)</label>
+            <div class="banner-input-wrap">
+              <input type="url" id="prof-banner-input" placeholder="https://..." style="flex:1">
+              <label class="btn-utility" style="cursor:pointer;display:flex;align-items:center;white-space:nowrap">
+                📤 Cloudinary
+                <input type="file" accept="image/*" style="display:none" onchange="uploadMyBanner(event)">
+              </label>
+            </div>
+          </div>
+          <button class="btn-pill mt-2 prof-save-btn" onclick="saveProfile()">Enregistrer les modifications</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-setting" class="page-view">
+      <h1>Paramètres</h1>
+      <p class="tagline">Personnalise ton expérience</p>
+      <div class="settings-wrap">
+        <div class="settings-sec">
+          <h3>🎨 Apparence &amp; Options</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Thème sombre</div>
+              <div class="setting-desc">Passe l'interface en mode nuit</div>
+            </div>
+            <label class="tog tog-dark">
+              <input type="checkbox" id="tog-dark" onchange="applyTheme(this.checked)">
+              <div class="tog-track"></div>
+              <div class="tog-thumb"></div>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Animations et transitions</div>
+              <div class="setting-desc">Activer les animations fluides lors du changement de page</div>
+            </div>
+            <label class="tog">
+              <input type="checkbox" id="tog-animations" checked onchange="toggleAnimations(this.checked)">
+              <div class="tog-track"></div>
+              <div class="tog-thumb"></div>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Apparaître dans messages</div>
+              <div class="setting-desc">Les autres peuvent t'envoyer des DM</div>
+            </div>
+            <label class="tog">
+              <input type="checkbox" id="tog-allow-msgs" checked onchange="toggleAllowMsgs(this.checked)">
+              <div class="tog-track"></div>
+              <div class="tog-thumb"></div>
+            </label>
+          </div>
+        </div>
+        
+        <div class="settings-sec">
+          <h3>📧 Notifications Email</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Recevoir des notifications par mails</div>
+              <div class="setting-desc">Pour les nouveaux messages et posts</div>
+            </div>
+            <label class="tog">
+              <input type="checkbox" id="tog-email-notif" onchange="toggleEmailNotifs(this.checked)">
+              <div class="tog-track"></div>
+              <div class="tog-thumb"></div>
+            </label>
+          </div>
+          <div class="input-group" style="margin-top:16px;">
+            <label>Adresse e-mail</label>
+            <input type="email" id="setting-email" placeholder="ton.email@exemple.com">
+          </div>
+          <button class="btn-utility" onclick="saveEmailSettings()">Sauvegarder l'email</button>
+        </div>
+
+        <div class="settings-sec">
+          <h3>🔔 Notifications Push</h3>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Recevoir des notifications push</div>
+              <div class="setting-desc">Alertes directement sur cet appareil, même quand l'onglet est fermé</div>
+            </div>
+            <label class="tog">
+              <input type="checkbox" id="tog-push-notif" onchange="togglePushNotifs(this.checked)">
+              <div class="tog-track"></div>
+              <div class="tog-thumb"></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-sec">
+          <h3>📜 Historique Quiz IA</h3>
+          <p class="setting-desc" style="margin-bottom:12px;">Retrouve ici les quiz que tu as générés avec l'IA.</p>
+          <div id="settings-ai-quiz-history" style="display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto;">
+          </div>
+        </div>
+
+        <div class="settings-sec">
+          <h3>🔒 Sécurité</h3>
+          <div class="input-group">
+            <label>Nouveau mot de passe</label>
+            <input type="password" id="setting-pwd" placeholder="Nouveau mot de passe">
+          </div>
+          <button class="btn-pill" onclick="changePassword()">Mettre à jour</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="page-admin" class="page-view admin-only hidden">
+      <h1>Administration</h1>
+      <p class="tagline">Gestion globale de la plateforme DnB Reviz</p>
+ 
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-top:24px; margin-bottom:28px;">
+        <div style="background:var(--card-bg); border:1px solid var(--hl); border-radius:18px; padding:20px; text-align:center; box-shadow:0 2px 8px var(--shadow);">
+          <div style="font-size:13px; font-weight:700; color:var(--ink-m); text-transform:uppercase;">Total Membres</div>
+          <div id="stat-admin-members" style="font-size:32px; font-weight:800; color:var(--primary); margin-top:6px;">0</div>
+        </div>
+        <div style="background:var(--card-bg); border:1px solid var(--hl); border-radius:18px; padding:20px; text-align:center; box-shadow:0 2px 8px var(--shadow);">
+          <div style="font-size:13px; font-weight:700; color:var(--ink-m); text-transform:uppercase;">Publications</div>
+          <div id="stat-admin-posts" style="font-size:32px; font-weight:800; color:#34c759; margin-top:6px;">0</div>
+        </div>
+        <div style="background:var(--card-bg); border:1px solid var(--hl); border-radius:18px; padding:20px; text-align:center; box-shadow:0 2px 8px var(--shadow);">
+          <div style="font-size:13px; font-weight:700; color:var(--ink-m); text-transform:uppercase;">Total Quiz</div>
+          <div id="stat-admin-quizzes" style="font-size:32px; font-weight:800; color:#ff9500; margin-top:6px;">0</div>
+        </div>
+        <div style="background:var(--card-bg); border:1px solid var(--hl); border-radius:18px; padding:20px; text-align:center; box-shadow:0 2px 8px var(--shadow);">
+          <div style="font-size:13px; font-weight:700; color:var(--ink-m); text-transform:uppercase;">Commentaires</div>
+          <div id="stat-admin-comments" style="font-size:32px; font-weight:800; color:#5856d6; margin-top:6px;">0</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; border-bottom:2px solid var(--hl); margin-bottom:24px; overflow-x:auto;">
+        <button class="tk-tab active" data-adm-tab="membres" onclick="switchAdminTab('membres')" style="padding:12px 20px; font-size:16px;">Membres</button>
+        <button class="tk-tab" data-adm-tab="matieres" onclick="switchAdminTab('matieres')" style="padding:12px 20px; font-size:16px;">Matières</button>
+<button class="tk-tab" data-adm-tab="classes" onclick="switchAdminTab('classes')" style="padding:12px 20px; font-size:16px;">Classes & Établissements</button>
+        <button class="tk-tab" data-adm-tab="moderation" onclick="switchAdminTab('moderation')" style="padding:12px 20px; font-size:16px; position:relative;">
+          Modération
+          <span id="admin-mod-dot" style="display:none; width:10px; height:10px; background:var(--danger); border-radius:50%; position:absolute; top:8px; right:6px;"></span>
+        </button>
+        <button class="tk-tab" data-adm-tab="maintenance" onclick="switchAdminTab('maintenance')" style="padding:12px 20px; font-size:16px;">Maintenance</button>
+        <button class="tk-tab" data-adm-tab="notifications" onclick="switchAdminTab('notifications')" style="padding:12px 20px; font-size:16px;">Notifications</button>
+      </div>
+
+      <div id="adm-view-membres" class="adm-tab-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <div style="display:flex; gap:10px; flex:1; min-width:280px; flex-wrap:wrap;">
+            <input type="text" id="adm-filter-search" placeholder="Rechercher par nom, prénom ou ID..." oninput="renderAdminUsersTable()" style="flex:1; min-width:200px; padding:10px 16px; border-radius:9999px; border:1px solid var(--input-b); background:var(--input-bg); color:var(--ink); outline:none; font-size:14px;">
+            <select id="adm-filter-role" onchange="renderAdminUsersTable()" style="padding:10px 16px; border-radius:9999px; border:1px solid var(--input-b); background:var(--input-bg); color:var(--ink); outline:none; font-size:14px; cursor:pointer;">
+              <option value="all">Tous les rôles</option>
+              <option value="élève">Élève</option>
+              <option value="professeur">Professeur</option>
+              <option value="admin">Administrateur</option>
+              <option value="HS">Hors-Série</option>
+            </select>
+            <select id="adm-filter-etab" onchange="renderAdminUsersTable()" style="padding:10px 16px; border-radius:9999px; border:1px solid var(--input-b); background:var(--input-bg); color:var(--ink); outline:none; font-size:14px; cursor:pointer;">
+              <option value="all">Tous les établissements</option>
+            </select>
+            <select id="adm-filter-classe" onchange="renderAdminUsersTable()" style="padding:10px 16px; border-radius:9999px; border:1px solid var(--input-b); background:var(--input-bg); color:var(--ink); outline:none; font-size:14px; cursor:pointer;">
+              <option value="all">Toutes les classes</option>
+            </select>
+          </div>
+          <button class="btn-pill" onclick="openUserModal(false)">+ Créer un compte</button>
+        </div>
+        <table class="admin-table">
+          <thead><tr><th>Identifiant</th><th>Nom</th><th>Rôle</th><th>Extras</th><th>Actions</th></tr></thead>
+          <tbody id="admin-users-tb"></tbody>
+        </table>
+      </div>
+
+      <div id="adm-view-matieres" class="adm-tab-content" style="display:none;">
+        <div class="adm-head" style="margin-top:0; margin-bottom:16px;">
+          <h3>Liste des matières</h3>
+          <button class="btn-pill-van" onclick="openMatiereModal(false)">+ Ajouter une matière</button>
+        </div>
+        <table class="admin-table">
+          <thead><tr><th>Icône</th><th>Matière</th><th>Actions</th></tr></thead>
+          <tbody id="admin-mat-tb"></tbody>
+        </table>
+      </div>
+
+      <div id="adm-view-moderation" class="adm-tab-content" style="display:none;">
+        <h3 style="margin-bottom:16px;">Publications signalées</h3>
+        <table class="admin-table">
+          <thead><tr><th>Publication</th><th>Signalé par</th><th>Raison</th><th>Date</th><th>Actions</th></tr></thead>
+          <tbody id="admin-mod-tb"></tbody>
+        </table>
+      </div>
+<div id="adm-view-classes" class="adm-tab-content" style="display:none;">
+  
+  <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+
+    <div style="flex: 1; min-width: 280px;">
+      <div class="adm-head" style="margin-top:0; margin-bottom:12px;">
+        <h3>🏛️ Établissements</h3>
+        <button class="btn-pill-van" onclick="openEtablissementModal(false)">+ Ajouter</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Nom</th><th>Ville</th><th>Actions</th></tr></thead>
+        <tbody id="admin-etab-tb"></tbody>
+      </table>
+    </div>
+
+    <div style="flex: 1; min-width: 280px;">
+      <div class="adm-head" style="margin-top:0; margin-bottom:12px;">
+        <h3>🏫 Classes</h3>
+        <button class="btn-pill-van" onclick="openClasseModal(false)">+ Ajouter</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Nom</th><th>Établissement</th><th>Actions</th></tr></thead>
+        <tbody id="admin-classe-tb"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+<div id="adm-view-maintenance" class="adm-tab-content" style="display:none;">
+  <div class="settings-sec" style="max-width:560px;">
+    <h3>🛠️ Mode maintenance</h3>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Activer la maintenance</div>
+        <div class="setting-desc">Bloque l'accès au site pour tous les membres (les administrateurs gardent l'accès) et affiche un écran d'information.</div>
+      </div>
+      <label class="tog">
+        <input type="checkbox" id="adm-maintenance-toggle" onchange="saveMaintenanceSettings(this.checked)">
+        <div class="tog-track"></div>
+        <div class="tog-thumb"></div>
+      </label>
+    </div>
+    <div class="input-group mt-2">
+      <label>Message affiché aux membres</label>
+      <textarea id="adm-maintenance-message" rows="3" placeholder="DnB Reviz est actuellement en maintenance. Nous serons de retour très bientôt, merci de ta patience !" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink); resize:vertical;"></textarea>
+    </div>
+    <button class="btn-pill mt-2" onclick="saveMaintenanceSettings(document.getElementById('adm-maintenance-toggle').checked)">Enregistrer le message</button>
+  </div>
+</div>
+<div id="adm-view-notifications" class="adm-tab-content" style="display:none;">
+  <div class="settings-sec" style="max-width:560px;">
+    <h3>🔔 Envoyer une notification push</h3>
+    <p class="setting-desc" style="margin-bottom:16px;">Envoyée à tous les membres ayant activé les notifications push dans leurs paramètres.</p>
+    <div class="input-group">
+      <label>Titre</label>
+      <input type="text" id="adm-push-title" placeholder="Ex : Nouveau quiz disponible !" maxlength="65" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink);">
+    </div>
+    <div class="input-group mt-2">
+      <label>Message</label>
+      <textarea id="adm-push-body" rows="3" maxlength="200" placeholder="Le contenu de la notification..." style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink); resize:vertical;"></textarea>
+    </div>
+    <button class="btn-pill mt-2" id="adm-push-send-btn" onclick="sendAdminPushNotification()">Envoyer la notification</button>
+    <p id="adm-push-status" class="setting-desc" style="margin-top:10px;"></p>
+  </div>
+</div>
+    </section>
+
+    <section id="page-statistiques" class="page-view admin-only hidden">
+      <div class="stats-hero">
+        <div class="stats-hero-main">
+          <div class="stats-eyebrow"><span class="stats-live-dot"></span> Espace administrateur</div>
+          <div class="ph-row stats-title-row">
+            <div>
+              <h1>Statistiques</h1>
+              <p class="tagline">Comprends l'activité de DnB Reviz en un coup d'œil.</p>
+            </div>
+            <div class="stats-toolbar">
+              <div class="stats-range-wrap">
+                <span>Analyse</span>
+                <select id="stats-range" class="stats-select" onchange="loadStatisticsDashboard()">
+                  <option value="1">Aujourd’hui</option>
+                  <option value="7" selected>7 jours</option>
+                  <option value="30">30 jours</option>
+                  <option value="90">90 jours</option>
+                </select>
+              </div>
+              <button class="btn-ghost stats-export-btn" type="button" onclick="exportStatisticsJSON()">↧ JSON</button>
+              <button class="btn-pill stats-export-btn" type="button" onclick="exportStatisticsPDF()">↧ PDF</button>
+            </div>
+          </div>
+          <div class="stats-hero-note">
+            <div class="stats-note-icon">⌁</div>
+            <div><strong>Vue privée ADMIN</strong><span>Les identifiants détaillés restent dans les données internes de ton site. Google Analytics ne reçoit pas ces identifiants.</span></div>
+          </div>
+        </div>
+        <div class="stats-hero-orb stats-orb-one"></div>
+        <div class="stats-hero-orb stats-orb-two"></div>
+      </div>
+
+      <div class="stats-kpi-grid">
+        <div class="stats-kpi-card stats-kpi-primary"><span class="stats-kpi-icon">👥</span><div><div class="caption">Utilisateurs connus</div><strong id="stats-kpi-users">0</strong><small>comptes suivis</small></div></div>
+        <div class="stats-kpi-card"><span class="stats-kpi-icon">◷</span><div><div class="caption">Sessions</div><strong id="stats-kpi-sessions">0</strong><small>sur la période</small></div></div>
+        <div class="stats-kpi-card"><span class="stats-kpi-icon">↗</span><div><div class="caption">Connexions</div><strong id="stats-kpi-logins">0</strong><small>entrées enregistrées</small></div></div>
+        <div class="stats-kpi-card"><span class="stats-kpi-icon">⌁</span><div><div class="caption">Pic de connexions</div><strong id="stats-kpi-peak">0</strong><small>au même moment</small></div></div>
+        <div class="stats-kpi-card stats-kpi-live"><span class="stats-kpi-icon"><i></i></span><div><div class="caption">Connectés maintenant</div><strong id="stats-kpi-live">0</strong><small>activité récente</small></div></div>
+        <div class="stats-kpi-card"><span class="stats-kpi-icon">▤</span><div><div class="caption">Pages vues</div><strong id="stats-kpi-views">0</strong><small>navigations internes</small></div></div>
+      </div>
+
+      <div class="stats-grid-2 stats-chart-grid-main">
+        <div class="stats-card stats-card-chart stats-card-featured">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">FRÉQUENTATION</span><h3>Connexions par heure</h3><p class="caption">Quand les utilisateurs se connectent le plus.</p></div>
+            <span class="stats-card-badge">24 h</span>
+          </div>
+          <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-hourly-chart"></canvas></div>
+        </div>
+        <div class="stats-card stats-card-chart">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">PRÉSENCE</span><h3>Utilisateurs connectés</h3><p class="caption">Estimation à partir des sessions actives et du heartbeat.</p></div>
+            <span class="stats-card-badge stats-card-badge-soft">live</span>
+          </div>
+          <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-concurrent-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="stats-grid-2">
+        <div class="stats-card stats-card-chart">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">ÉVOLUTION</span><h3>Activité par jour</h3><p class="caption">Sessions et pages vues sur la période.</p></div>
+          </div>
+          <div class="stats-chart-wrap"><canvas id="stats-daily-chart"></canvas></div>
+        </div>
+        <div class="stats-card stats-card-chart">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">PROFIL</span><h3>Répartition des utilisateurs</h3><p class="caption">Rôles présents dans la base suivie.</p></div>
+          </div>
+          <div class="stats-split-chart">
+            <div class="stats-doughnut-wrap"><canvas id="stats-role-chart"></canvas><div class="stats-doughnut-center"><strong id="stats-role-total">0</strong><span>profils</span></div></div>
+            <div id="stats-role-legend" class="stats-legend"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-grid-2">
+        <div class="stats-card stats-card-chart">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">APPAREILS</span><h3>Appareils utilisés</h3><p class="caption">Mobile, tablette ou ordinateur.</p></div>
+          </div>
+          <div class="stats-split-chart stats-split-chart-device">
+            <div class="stats-doughnut-wrap"><canvas id="stats-device-chart"></canvas></div>
+            <div id="stats-device-legend" class="stats-legend"></div>
+          </div>
+        </div>
+        <div class="stats-card">
+          <div class="stats-card-head">
+            <div><span class="stats-section-label">LOCALISATION APPROXIMATIVE</span><h3>Zones / fuseaux horaires</h3><p class="caption">Lieu déduit du fuseau ou de la locale du navigateur.</p></div>
+            <span class="stats-card-badge">indicatif</span>
+          </div>
+          <div id="stats-timezones" class="stats-pills"></div>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="stats-card-head stats-users-head">
+          <div><span class="stats-section-label">DÉTAIL</span><h3>Utilisateurs & sessions</h3><p class="caption">Identifiants internes, dernière connexion et activité récente.</p></div>
+          <div class="stats-user-actions"><span class="stats-count-badge" id="stats-user-count">0 utilisateurs</span><input id="stats-user-search" class="stats-search" type="search" placeholder="Rechercher un identifiant…" oninput="renderStatisticsUsers()"></div>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Dernière connexion</th><th>Sessions</th><th>Dernière page</th><th>Zone</th></tr></thead>
+            <tbody id="stats-users-tbody"><tr><td colspan="6" class="stats-empty">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="stats-card">
+        <div class="stats-card-head"><div><span class="stats-section-label">NAVIGATION</span><h3>Pages les plus consultées</h3><p class="caption">Les écrans les plus visités sur la période sélectionnée.</p></div></div>
+        <div id="stats-pages" class="stats-pages-grid"></div>
+      </div>
+
+      <div class="stats-footer-row"><p id="stats-status" class="caption"></p><button class="btn-ghost btn-sm" type="button" onclick="loadStatisticsDashboard()">↻ Actualiser</button></div>
+    </section>
+
+    <footer class="site-footer">
+      <p>DnB Reviz est un projet bénévole créé par Dan Bouillet pour aider les élèves à réviser.</p>
+      <p>© 2026 Dan Bouillet (DnB Reviz). Tous droits réservés.</p>
+      <p style="margin-top:8px;"><a onclick="openModal('m-legals')">Mentions Légales</a></p>
+    </footer>
+
+  </main>
+</div>
+
+<div id="m-legals" class="moverlay" onclick="closeOnOut(event,'m-legals')">
+  <div class="mbox" style="max-width: 600px;">
+    <h2>Mentions Légales</h2>
+    <div style="font-size: 14px; color: var(--ink); line-height: 1.6; margin-top: 16px;">
+      <p><strong>Éditeur et Créateur :</strong> Dan Bouillet</p>
+      <p><strong>Merci à :</strong> Jayden H. , Algzali T. , Tom B. , Yoan R. </p>
+      <p><strong>Hébergement :</strong> GitHub Pages (GitHub Inc.) | 88 Colin P. Kelly Jr. Street San Francisco, CA 94107, États-Unis</p>
+      <p><strong>Base de données :</strong> Firebase (Google LLC) | 1600 Amphitheatre Parkway, Mountain View, CA 94043, États-Unis</p>
+      <p><strong>Données Personnelles :</strong> Seuls les noms et prénoms des élèves sont stockés dans la base de données. Les mots de passe et adresses e-mail ne sont <strong>pas</strong> conservés par soucis de confidentialité, même à titre de tests.</p>
+      <p><strong>Contact concernant les données personnelles :</strong>Pour toute demande relative à tes données personnelles, tu peux contacter l'éditeur à l'adresse : dan.bouillet14@gmail.com.</p>
+      <p><strong>Propriété intellectuelle :</strong> © 2026 DnB Reviz. Tous droits réservés.</p>
+    </div>
+    <div class="mact mt-3">
+      <button class="btn-pill" style="width: 100%; justify-content: center;" onclick="closeModal('m-legals')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="m-share" class="moverlay" onclick="closeOnOut(event,'m-share')">
+  <div class="mbox" style="max-width: 420px;">
+    <h2>Partager</h2>
+    <p class="caption" style="margin-bottom:16px;">Choisis une discussion récente à qui envoyer ceci :</p>
+    <div id="share-contacts-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+    </div>
+    <div class="mact mt-3">
+      <button class="btn-ghost" style="width:100%;" onclick="closeModal('m-share')">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-view-post" class="moverlay" onclick="closeOnOut(event,'m-view-post')">
+  <div class="mbox" style="max-width:600px; padding:24px;">
+    <div id="view-post-content"></div>
+    <div class="mact mt-3">
+      <button class="btn-ghost" style="width:100%; border:1px solid var(--hl);" onclick="closeModal('m-view-post')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-gallery" class="moverlay" onclick="closeOnOut(event,'m-gallery')" style="z-index: 10000; background: rgba(0,0,0,0.92);">
+  <span onclick="closeModal('m-gallery')" style="position: absolute; top: 20px; right: 30px; color: #fff; font-size: 42px; cursor: pointer; z-index: 10001; font-weight: bold; line-height: 1;">&times;</span>
+  <button id="gal-prev" onclick="navGallery(-1, event)" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); color: #fff; border: none; font-size: 30px; width: 54px; height: 54px; border-radius: 50%; cursor: pointer; z-index: 10001; display: flex; align-items: center; justify-content: center;">&#10094;</button>
+  <div style="width: 85vw; height: 80vh; display: flex; align-items: center; justify-content: center;" onclick="event.stopPropagation();">
+    <img id="gal-img" src="" style="width: 100%; height: 100%; object-fit: contain; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" alt="Aperçu plein écran">  </div>
+    <button id="gal-open-btn" onclick="openImageInNewTab()" style="position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; backdrop-filter: blur(4px); transition: background 0.2s; z-index: 10001;">
+      ↗ Ouvrir dans un nouvel onglet
+    </button>
+    <button id="gal-next" onclick="navGallery(1, event)" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); color: #fff; border: none; font-size: 30px; width: 54px; height: 54px; border-radius: 50%; cursor: pointer; z-index: 10001; display: flex; align-items: center; justify-content: center;">&#10095;</button>
+  <div id="gal-counter" style="position: absolute; bottom: 25px; color: #fff; font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 6px 16px; border-radius: 20px;"></div>
+</div>
+
+<div id="m-report" class="moverlay" onclick="closeOnOut(event,'m-report')">
+  <div class="mbox" style="max-width: 450px;">
+    <h2>Signaler cette publication</h2>
+    <p class="caption mt-1 mb-2">Pourquoi signalez-vous ce contenu ?</p>
+    <input type="hidden" id="report-post-id">
+    <input type="hidden" id="report-post-title">
+    <input type="hidden" id="report-post-author">
+    <textarea id="report-reason" placeholder="Ex : Contenu inapproprié, spam, insultes..." rows="4" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink);"></textarea>
+    <div class="mact mt-3">
+      <button class="btn-ghost" onclick="closeModal('m-report')">Annuler</button>
+      <button class="btn-danger" style="padding:10px 18px; border-radius:9999px; font-weight:600;" onclick="submitReport()">Envoyer le signalement</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="m-filters" class="moverlay" onclick="closeOnOut(event,'m-filters')">
+  <div class="mbox">
+    <h2>Filtres d'affichage</h2>
+    <div class="input-group">
+      <label>Matière</label>
+      <select id="filter-subject"></select>
+    </div>
+    <div class="input-group" id="filter-type-group">
+      <label id="filter-type-label">Type de document</label>
+      <select id="filter-type">
+        <option value="all">Tout</option>
+        <option value="fiches">Fiches</option>
+        <option value="revisions">Révisions</option>
+      </select>
+    </div>
+    <div class="input-group" id="filter-tags-group">
+      <label>Tags</label>
+      <div class="tag-option-group" id="filter-tags-options"></div>
+    </div>
+    <div class="input-group">
+      <label>Trier par</label>
+      <select id="filter-order">
+        <option value="recent">Le plus récent d'abord</option>
+        <option value="oldest">Le plus ancien d'abord</option>
+        <option value="likes">Le plus populaire (Likes)</option>
+      </select>
+    </div>
+    <button class="btn-pill mt-2" style="width:100%;justify-content:center" onclick="applyFilters()">Appliquer</button>
+  </div>
+</div>
+
+<div id="m-new-chat" class="moverlay" onclick="closeOnOut(event,'m-new-chat')">
+  <div class="mbox" style="padding:24px;">
+    <h2>Nouvelle discussion</h2>
+    <div class="input-group" style="margin-bottom:12px;">
+      <input type="text" id="search-contact" placeholder="Rechercher un membre..." onkeyup="renderContactSearch()">
+    </div>
+    <div id="new-chat-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+  </div>
+</div>
+
+<div id="m-follows" class="moverlay" onclick="closeOnOut(event,'m-follows')">
+  <div class="mbox">
+    <h2 id="m-follows-title">Abonnés</h2>
+    <div style="display:flex;flex-direction:column;gap:4px" id="follows-list-box"></div>
+  </div>
+</div>
+
+<div id="m-push-consent" class="moverlay">
+  <div class="mbox">
+    <h2>🔔 Activer les notifications ?</h2>
+    <p id="push-consent-text" class="caption mt-1" style="margin-bottom:20px">Reçois les rappels et informations importantes de DnB Reviz directement sur cet appareil.</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn-ghost" type="button" onclick="handlePushConsent(false)">Non, merci</button>
+      <button class="btn-pill" type="button" onclick="handlePushConsent(true)">Oui, activer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-force-pwd" class="moverlay">
+  <div class="mbox">
+    <h2>Ton mot de passe est provisoire</h2>
+    <p class="caption mt-1" style="margin-bottom:20px">Choisis un mot de passe pour sécuriser ton accès.</p>
+    <div class="input-group">
+      <label>Nouveau mot de passe</label>
+      <input type="password" id="force-pwd" placeholder="8 car. · 1 maj. · 1 min. · 1 chiffre · 1 spécial">
+    <p class="caption mt-1">8 caractères minimum, avec 1 majuscule, 1 minuscule, 1 chiffre et 1 caractère spécial.</p>
+    </div>
+    <div class="input-group">
+      <label>Adresse e-mail (facultatif)</label>
+      <input type="email" id="force-email" placeholder="ton.email@exemple.com">
+      <p class="caption mt-1">Elle te permettra d'activer les notifications par mail, dans les paramètres.</p>
+    </div>
+    <button class="btn-pill" style="width:100%;justify-content:center" onclick="handleForcePwd()">Valider et continuer</button>
+  </div>
+</div>
+
+<div id="m-add-mat" class="moverlay" onclick="closeOnOut(event,'m-add-mat')">
+  <div class="mbox">
+    <h2>Nouvelle matière</h2>
+    <div class="input-group"><label>Nom</label><input type="text" id="mat-name" placeholder="Ex : Mercatique"></div>
+    <div class="input-group"><label>Émoji (ou drapeau)</label><input type="text" id="mat-icon" placeholder="🎯" maxlength="10"></div>
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-add-mat')">Annuler</button>
+      <button class="btn-pill" onclick="handleAddMatiere()">Créer</button>
+    </div>
+  </div>
+</div>
+<div id="m-etablissement" class="moverlay" onclick="closeOnOut(event,'m-etablissement')">
+  <div class="mbox">
+    <h2 id="m-etablissement-title">Nouvel Établissement</h2>
+    <input type="hidden" id="edit-etab-id">
+    <div class="input-group"><label>Nom *</label><input type="text" id="etab-name" placeholder="Ex: Lycée Jean Moulin"></div>
+    <div class="input-group"><label>Ville</label><input type="text" id="etab-ville" placeholder="Ex: Paris"></div>
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-etablissement')">Annuler</button>
+      <button class="btn-pill" onclick="saveEtablissement()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-classe" class="moverlay" onclick="closeOnOut(event,'m-classe')">
+  <div class="mbox">
+    <h2 id="m-classe-title">Nouvelle Classe</h2>
+    <input type="hidden" id="edit-classe-id">
+    <div class="input-group"><label>Nom *</label><input type="text" id="classe-name" placeholder="Ex: Terminale STMG 1"></div>
+    <div class="input-group">
+      <label>Établissement *</label>
+      <select id="classe-etab" style="margin-bottom:8px;"></select>
+    </div>
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-classe')">Annuler</button>
+      <button class="btn-pill" onclick="saveClasse()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+<div id="m-edit-mat" class="moverlay" onclick="closeOnOut(event,'m-edit-mat')">
+  <div class="mbox">
+    <h2 id="m-edit-mat-title">Matière</h2>
+    <input type="hidden" id="edit-mat-id">
+    <div class="input-group"><label>Nom</label><input type="text" id="adm-m-name"></div>
+    <div class="input-group"><label>Émoji (ou drapeau)</label><input type="text" id="adm-m-icon" maxlength="10"></div>
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-edit-mat')">Annuler</button>
+      <button class="btn-pill" onclick="saveMatiereConfig()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-user" class="moverlay" onclick="closeOnOut(event,'m-user')">
+  <div class="mbox">
+    <h2 id="m-user-title">Compte</h2>
+    <input type="hidden" id="edit-user-id">
+    <div class="input-group">
+      <label>Identifiant</label>
+      <input type="text" id="adm-u-id" placeholder="prenom.nom" autocomplete="off">
+    </div>
+    <div class="input-group" id="adm-pwd-wrap">
+      <label>Mot de passe provisoire</label>
+      <input type="text" id="adm-u-pwd" value="stmg2026">
+    </div>
+    <div class="input-group">
+      <label>Rôle principal</label>
+      <select id="adm-u-role">
+        <option value="élève">Élève</option>
+        <option value="professeur">Professeur</option>
+        <option value="admin">Administrateur</option>
+        <option value="HS">Hors-Série</option>
+      </select>
+    </div>
+
+    <div class="input-group">
+      <label>Établissement</label>
+      <select id="adm-u-etab">
+        <option value="">Aucun</option>
+      </select>
+    </div>
+    
+    <div class="input-group">
+      <label>Classe</label>
+      <select id="adm-u-classe">
+        <option value="">Aucune</option>
+      </select>
+    </div>
+    
+    <div class="input-group">
+      <label>Accès &amp; Badges</label>
+      <div class="chk-group" style="flex-wrap: wrap;">
+        <label class="chk-label"><input type="checkbox" id="adm-u-admin"> Admin</label>
+        <label class="chk-label"><input type="checkbox" id="adm-u-vol"> Volontaire</label>
+        <label class="chk-label">
+          <input type="checkbox" id="adm-u-verified"> Certifié
+          <img src="https://cdn.prod.website-files.com/6214eaa668d0de27c3ea80cf/652fd0e960df145545f25f12_Pastille%20bleu%20certification%20instagram.png" class="verified-icon" alt="">
+        </label>
+      </div>
+    </div>
+
+    <div class="input-group mt-1">
+      <label>Faux abonnés crédibles (Génération auto)</label>
+      <div style="display:flex; gap:8px;">
+        <input type="number" id="adm-u-fake-count" placeholder="Quantité (ex: 35 ou 100000)" min="0" style="flex:1;">
+        <button type="button" class="btn-utility" onclick="generateAndSetFakeFollowers()">Générer</button>
+        <button type="button" class="btn-danger" style="border-radius:8px;" onclick="clearFakeFollowers()">Retirer</button>
+      </div>
+      <p class="caption mt-1" id="adm-fake-preview">Aucun faux abonné rattaché.</p>
+    </div>
+
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-user')">Annuler</button>
+      <button class="btn-pill" onclick="saveUserConfig()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-ann" class="moverlay" onclick="closeOnOut(event,'m-ann')">
+  <div class="mbox">
+    <h2 id="m-ann-title">Annonce</h2>
+    <input type="hidden" id="ann-edit-id">
+    <div class="input-group"><label>Titre</label><input type="text" id="ann-title" placeholder="Ex : TP noté vendredi"></div>
+    <div class="input-group"><label>Contenu</label><textarea id="ann-body" placeholder="Détail de l'annonce…" rows="4"></textarea></div>
+    <div class="mact">
+      <button class="btn-ghost" onclick="closeModal('m-ann')">Annuler</button>
+      <button class="btn-pill" onclick="saveAnnonce()">Publier</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-filesize" class="moverlay" onclick="closeOnOut(event,'m-filesize')">
+  <div class="mbox" style="max-width:400px;text-align:center">
+    <div style="font-size:38px;margin-bottom:14px">📦</div>
+    <h2 style="margin-bottom:10px">Fichier trop lourd, impossible de l'importer</h2>
+    <p class="caption" style="margin-bottom:24px;font-size:14px;line-height:1.6">
+      La taille maximale autorisée est de 25 Mo au total.<br>
+      Choisis des fichiers plus légers, ou colle plutôt un lien Google Drive dans le champ « Lien externe » juste en dessous.
+    </p>
+    <button class="btn-pill" style="width:100%;justify-content:center" onclick="closeModal('m-filesize')">Compris</button>
+  </div>
+</div>
+
+<div id="m-ia-quiz" class="moverlay" onclick="closeOnOut(event,'m-ia-quiz')">
+  <div class="mbox">
+    <h2>Générer un Quiz avec l'IA</h2>
+    <p class="caption mt-1 mb-2">Décris le sujet et laisse l'IA préparer les questions.</p>
+    <div class="input-group mt-2">
+      <label>Matière *</label>
+      <select id="quiz-ia-matiere" onchange="if(this.value==='autre') document.getElementById('quiz-ia-matiere-custom').style.display='block'; else document.getElementById('quiz-ia-matiere-custom').style.display='none';"></select>
+      <input type="text" id="quiz-ia-matiere-custom" placeholder="Précise la matière..." style="display:none; margin-top:8px;">
+    </div>
+    <div class="input-group">
+      <label>Sujet principal *</label>
+      <input type="text" id="quiz-ia-topic" placeholder="Ex: La révolution française, Les fonctions dérivées...">
+    </div>
+    <div class="input-group">
+      <label>Nombre de questions *</label>
+      <input type="number" id="quiz-ia-count" value="5" min="1" max="20">
+    </div>
+    <div class="input-group">
+      <label>Précisions (facultatif)</label>
+      <textarea id="quiz-ia-desc" placeholder="Niveau de difficulté, points précis à aborder..."></textarea>
+    </div>
+    <div class="input-group">
+      <label>Tag</label>
+      <div class="tag-option-group">
+        <label class="tag-option">
+          <input type="checkbox" id="quiz-ia-tag-bac" value="bac">
+          <span>🎓 Bac</span>
+        </label>
+      </div>
+    </div>
+    <div id="quiz-ia-loading" style="display:none; text-align:center; padding:16px;">
+      <div class="spinner" style="margin:0 auto 10px;"></div>
+      <div style="font-size:14px; color:var(--ink-m);">Génération du quiz en cours...</div>
+    </div>
+    <div class="mact" id="quiz-ia-actions">
+      <button class="btn-ghost" onclick="closeModal('m-ia-quiz')">Annuler</button>
+      <button class="btn-pill" onclick="generateAIQuiz()">✨ Générer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-take-quiz" class="moverlay">
+  <div class="mbox" style="max-width:600px;">
+    <div class="q-header">
+      <h2 id="take-quiz-title" style="margin:0">Titre Quiz</h2>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="btn-utility btn-sm" id="btn-tts-speaker" style="padding: 4px 10px; font-size:16px;" onclick="readQuestionAloud()" title="Lire la question à voix haute">🔊</button>
+        <span class="type-tag" id="take-quiz-progress" style="background:var(--primary-l); color:var(--primary-f); font-size:14px;">1/10</span>
+      </div>
+    </div>
+    <div id="take-quiz-loading" style="display:none; text-align:center; padding:40px 0;">
+      <div class="spinner" style="margin:0 auto 10px;"></div>
+      <div style="font-size:14px; color:var(--ink-m);">Reformulation du quiz avec l'IA...</div>
+    </div>
+    <div id="take-quiz-content" style="margin-top:20px;">
+      <div class="quiz-question-box" id="take-quiz-question" style="color: var(--ink);">Question ?</div>
+      <div id="take-quiz-options"></div>
+    </div>
+    <div class="mact mt-3">
+      <button class="btn-ghost" onclick="abortQuiz()">Quitter</button>
+      <button class="btn-pill" id="btn-next-question" onclick="nextQuizQuestion()" disabled>Suivant</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-quiz-result" class="moverlay">
+  <div class="mbox" style="text-align:center;">
+    <h2>Résultat du Quiz</h2>
+    <div style="font-size:48px; font-weight:800; color:var(--primary); margin:16px 0;" id="quiz-final-score">0/0</div>
+    <p class="caption" id="quiz-result-msg" style="margin-bottom:24px;">Bien joué !</p>
+    
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <button class="btn-pill" style="width:100%; justify-content:center; padding:12px;" onclick="showQuizAnswers()">Voir les réponses (et explications)</button>
+      <button class="btn-ghost" style="width:100%; border:1px solid var(--hl);" id="btn-quiz-restart" onclick="restartQuiz()">Recommencer</button>
+      <button class="btn-ghost" onclick="closeModal('m-quiz-result'); closeTakeQuizModal();">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="m-quiz-answers" class="moverlay">
+  <div class="mbox" style="max-width:700px;">
+    <h2>Correction du Quiz</h2>
+    <div id="quiz-answers-container" style="max-height:60vh; overflow-y:auto; margin-top:20px; padding-right:10px; display:flex; flex-direction:column; gap:16px;">
+    </div>
+    <div class="mact mt-3">
+      <button class="btn-pill" onclick="closeModal('m-quiz-answers')">Fermer la correction</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.min.js"></script>
+<script type="module" src="script.js"></script>
+</body>
+</html>
