@@ -165,50 +165,13 @@ async function syncOneSignalUser(u) {
 
 window.currentUser = null;
 
-const DNB_SESSION_COOKIE_NAME = "dnb_reviz_session";
-const DNB_SESSION_COOKIE_ENABLED = window.location.hostname === "dnb-95.github.io";
-const DNB_SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 jours
-
-function getSessionCookie() {
-  if (!DNB_SESSION_COOKIE_ENABLED) return null;
-  const prefix = `${DNB_SESSION_COOKIE_NAME}=`;
-  const found = document.cookie.split("; ").find(part => part.startsWith(prefix));
-  if (!found) return null;
-  try {
-    return decodeURIComponent(found.slice(prefix.length));
-  } catch (_) {
-    return null;
-  }
-}
-
-function setSessionCookie(value) {
-  if (!DNB_SESSION_COOKIE_ENABLED) return;
-  try {
-    document.cookie = `${DNB_SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Max-Age=${DNB_SESSION_COOKIE_MAX_AGE}; Path=/; SameSite=Lax; Secure`;
-  } catch (error) {
-    console.warn("Impossible de sauvegarder le cookie de session :", error);
-  }
-}
-
-function clearSessionCookie() {
-  if (!DNB_SESSION_COOKIE_ENABLED) return;
-  try {
-    document.cookie = `${DNB_SESSION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
-  } catch (_) {}
-}
-
 function saveSessionLocally(user = currentUser) {
   if (!user) return;
   try {
     const safe = { ...user };
     delete safe.password;
     delete safe.authPassword;
-    const serialized = JSON.stringify(safe);
-    localStorage.setItem("dnb_reviz_session", serialized);
-
-    if (DNB_SESSION_COOKIE_ENABLED) {
-      setSessionCookie(serialized);
-    }
+    localStorage.setItem("dnb_reviz_session", JSON.stringify(safe));
   } catch (error) {
     console.warn("Impossible de sauvegarder la session locale :", error);
   }
@@ -1029,48 +992,39 @@ function showInternalView(target) {
   if (target === 'statistiques') loadStatisticsDashboard();
 }
 
-const restoreLocalSession = async () => {
-  let raw = null;
-
-  try {
-    raw = localStorage.getItem("dnb_reviz_session");
-  } catch (_) {}
-
-  if (!raw && DNB_SESSION_COOKIE_ENABLED) {
-    raw = getSessionCookie();
+async function restoreSavedSession() {
+  const s = localStorage.getItem("dnb_reviz_session");
+  if (!s) {
+    handleHashChange();
+    return;
   }
 
-  if (!raw) return;
-
   try {
-    const cached = JSON.parse(raw);
+    const cached = JSON.parse(s);
+    if (!cached?.id) throw new Error("SESSION_INVALID");
+
     hydrateSession(cached);
 
     try {
       const freshSnap = await getDoc(doc(db, "users", cached.id));
       if (freshSnap.exists()) {
-        const freshUser = { id: freshSnap.id, ...freshSnap.data() };
-        hydrateSession(freshUser);
-        if (DNB_SESSION_COOKIE_ENABLED) {
-          saveSessionLocally(freshUser);
-        }
+        hydrateSession({ id: freshSnap.id, ...freshSnap.data() });
       }
     } catch(e) {
       console.error(e);
     }
   } catch (e) {
     console.error("Impossible de restaurer la session locale :", e);
-    try {
-      localStorage.removeItem("dnb_reviz_session");
-    } catch (_) {}
-    clearSessionCookie();
+    localStorage.removeItem("dnb_reviz_session");
   }
-};
 
-restoreLocalSession().finally(() => {
-  signInAnonymously(auth).catch(console.error);
   handleHashChange();
-});
+}
+
+// La restauration de session ne dépend plus de l'authentification anonyme.
+// Firebase Anonymous Auth continue de s'initialiser en parallèle comme avant.
+restoreSavedSession();
+signInAnonymously(auth).catch(console.error);
 
 window.handleLogin = async () => {
   const now = Date.now();
@@ -1132,7 +1086,6 @@ window.handleLogout = async () => {
 
   try {
     localStorage.removeItem("dnb_reviz_session");
-    clearSessionCookie();
   } catch (error) {
     console.warn("Impossible de supprimer la session locale :", error);
   }
