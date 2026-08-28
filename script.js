@@ -644,7 +644,7 @@ window.sendAdminPushNotification = async () => {
         app_id: "d0900059-082b-458f-9bb1-8798546b8010",
         title,
         body,
-        url: "https://dnb95.github.io/home/"
+        url: "https://dnb-95.github.io/home/"
       })
     });
     const data = await res.json();
