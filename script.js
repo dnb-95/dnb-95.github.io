@@ -165,13 +165,50 @@ async function syncOneSignalUser(u) {
 
 window.currentUser = null;
 
+const DNB_SESSION_COOKIE_NAME = "dnb_reviz_session";
+const DNB_SESSION_COOKIE_ENABLED = window.location.hostname === "dnb-95.github.io";
+const DNB_SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 jours
+
+function getSessionCookie() {
+  if (!DNB_SESSION_COOKIE_ENABLED) return null;
+  const prefix = `${DNB_SESSION_COOKIE_NAME}=`;
+  const found = document.cookie.split("; ").find(part => part.startsWith(prefix));
+  if (!found) return null;
+  try {
+    return decodeURIComponent(found.slice(prefix.length));
+  } catch (_) {
+    return null;
+  }
+}
+
+function setSessionCookie(value) {
+  if (!DNB_SESSION_COOKIE_ENABLED) return;
+  try {
+    document.cookie = `${DNB_SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Max-Age=${DNB_SESSION_COOKIE_MAX_AGE}; Path=/; SameSite=Lax; Secure`;
+  } catch (error) {
+    console.warn("Impossible de sauvegarder le cookie de session :", error);
+  }
+}
+
+function clearSessionCookie() {
+  if (!DNB_SESSION_COOKIE_ENABLED) return;
+  try {
+    document.cookie = `${DNB_SESSION_COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax; Secure`;
+  } catch (_) {}
+}
+
 function saveSessionLocally(user = currentUser) {
   if (!user) return;
   try {
     const safe = { ...user };
     delete safe.password;
     delete safe.authPassword;
-    localStorage.setItem("dnb_reviz_session", JSON.stringify(safe));
+    const serialized = JSON.stringify(safe);
+    localStorage.setItem("dnb_reviz_session", serialized);
+
+    if (DNB_SESSION_COOKIE_ENABLED) {
+      setSessionCookie(serialized);
+    }
   } catch (error) {
     console.warn("Impossible de sauvegarder la session locale :", error);
   }
@@ -993,17 +1030,30 @@ function showInternalView(target) {
 }
 
 const restoreLocalSession = async () => {
-  const s = localStorage.getItem("dnb_reviz_session");
-  if (!s) return;
+  let raw = null;
 
   try {
-    const cached = JSON.parse(s);
+    raw = localStorage.getItem("dnb_reviz_session");
+  } catch (_) {}
+
+  if (!raw && DNB_SESSION_COOKIE_ENABLED) {
+    raw = getSessionCookie();
+  }
+
+  if (!raw) return;
+
+  try {
+    const cached = JSON.parse(raw);
     hydrateSession(cached);
 
     try {
       const freshSnap = await getDoc(doc(db, "users", cached.id));
       if (freshSnap.exists()) {
-        hydrateSession({ id: freshSnap.id, ...freshSnap.data() });
+        const freshUser = { id: freshSnap.id, ...freshSnap.data() };
+        hydrateSession(freshUser);
+        if (DNB_SESSION_COOKIE_ENABLED) {
+          saveSessionLocally(freshUser);
+        }
       }
     } catch(e) {
       console.error(e);
@@ -1013,6 +1063,7 @@ const restoreLocalSession = async () => {
     try {
       localStorage.removeItem("dnb_reviz_session");
     } catch (_) {}
+    clearSessionCookie();
   }
 };
 
@@ -1081,6 +1132,7 @@ window.handleLogout = async () => {
 
   try {
     localStorage.removeItem("dnb_reviz_session");
+    clearSessionCookie();
   } catch (error) {
     console.warn("Impossible de supprimer la session locale :", error);
   }
