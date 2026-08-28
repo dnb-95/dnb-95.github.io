@@ -1,4 +1,4 @@
-const ALLOWED_ORIGIN = "https://dnb95.github.io";
+const ALLOWED_ORIGIN = "https://dnb-95.github.io";
 
 const ONE_SIGNAL_APP_ID = "d0900059-082b-458f-9bb1-8798546b8010";
 const ONE_SIGNAL_API_URL = "https://api.onesignal.com/notifications?c=push";
@@ -70,7 +70,7 @@ export default {
         const title = String(body?.title || "Nouvelle notification").trim();
         const message = String(body?.body || "").trim();
         const notificationUrl = String(
-          body?.url || "https://dnb95.github.io/home/"
+          body?.url || "https://dnb-95.github.io/"
         ).trim();
 
         if (appId !== ONE_SIGNAL_APP_ID) {
