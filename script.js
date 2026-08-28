@@ -992,11 +992,14 @@ function showInternalView(target) {
   if (target === 'statistiques') loadStatisticsDashboard();
 }
 
-signInAnonymously(auth).then(async () => {
+const restoreLocalSession = async () => {
   const s = localStorage.getItem("dnb_reviz_session");
-  if (s) {
+  if (!s) return;
+
+  try {
     const cached = JSON.parse(s);
     hydrateSession(cached);
+
     try {
       const freshSnap = await getDoc(doc(db, "users", cached.id));
       if (freshSnap.exists()) {
@@ -1005,9 +1008,18 @@ signInAnonymously(auth).then(async () => {
     } catch(e) {
       console.error(e);
     }
+  } catch (e) {
+    console.error("Impossible de restaurer la session locale :", e);
+    try {
+      localStorage.removeItem("dnb_reviz_session");
+    } catch (_) {}
   }
+};
+
+restoreLocalSession().finally(() => {
+  signInAnonymously(auth).catch(console.error);
   handleHashChange();
-}).catch(console.error);
+});
 
 window.handleLogin = async () => {
   const now = Date.now();
