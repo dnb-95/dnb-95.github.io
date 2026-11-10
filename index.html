@@ -5,12 +5,13 @@
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
+
   gtag('config', 'G-YMJTRWHEK8');
 </script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://cdn.jsdelivr.net https://cdn.onesignal.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; connect-src 'self' https:; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; connect-src 'self' https:; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com; form-action 'self';">
 <title>DnB Reviz</title>
 <meta property="og:title" content="DnB Reviz" />
 <meta property="og:image" content="https://iili.io/CR2iW9n.png" />
@@ -27,27 +28,8 @@
 <meta name="apple-mobile-web-app-title" content="DnB Reviz">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="https://i.ibb.co/tPpXJLTz/Dn-BChrome.png">
+<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-<script>
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
-  window.dnbOneSignalReady = new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("ONESIGNAL_TIMEOUT")), 30000);
-    window.OneSignalDeferred.push(async function(OneSignal) {
-      try {
-        await OneSignal.init({
-          appId: "d0900059-082b-458f-9bb1-8798546b8010"
-        });
-        clearTimeout(timeout);
-        resolve(OneSignal);
-      } catch (error) {
-        clearTimeout(timeout);
-        reject(error);
-      }
-    });
-  });
-</script>
 <script>
   try {
     if (window.top !== window.self) window.top.location = window.self.location.href;
@@ -112,6 +94,7 @@
       <button class="nav-tab"         data-target="cours"     onclick="switchTab('cours')">Cours</button>
       <button class="nav-tab"         data-target="fichesrev" onclick="switchTab('fichesrev')">Fiches &amp; Révisions</button>
       <button class="nav-tab"         data-target="quiz"      onclick="switchTab('quiz')">Quiz</button>
+      <button class="nav-tab"         data-target="exercices" onclick="switchTab('exercices')">Exercices</button>
       <button class="nav-tab"         data-target="messages"  onclick="switchTab('messages')">Messages <span class="nav-unread-dot"></span></button>
       <button class="nav-tab hidden"  data-target="depot"     id="tab-depot" onclick="switchTab('depot')">Déposer un cours</button>
       <button class="nav-tab hidden"  data-target="creerquiz" id="tab-creer-quiz" onclick="switchTab('creerquiz')">Créer un quiz</button>
@@ -156,6 +139,9 @@
         </button>
         <button class="drawer-btn" data-tab="quiz" onclick="switchTab('quiz');closeDrawer()">
           <span class="d-icon">🎯</span> Quiz
+        </button>
+        <button class="drawer-btn" data-tab="exercices" onclick="switchTab('exercices');closeDrawer()">
+          <span class="d-icon">✍️</span> Exercices
         </button>
         <button class="drawer-btn" data-tab="messages" onclick="switchTab('messages');closeDrawer()">
           <span class="d-icon">💬</span> Messages <span class="nav-unread-dot"></span>
@@ -249,6 +235,10 @@
           <span class="quick-nav-icon">🎯</span>
           <span>Quiz</span>
         </div>
+        <div class="quick-nav-card" onclick="switchTab('exercices')">
+          <span class="quick-nav-icon">✍️</span>
+          <span>Exercices</span>
+        </div>
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:28px; margin-bottom:12px;">
@@ -319,6 +309,221 @@
         </div>
       </div>
       <div class="feed-wrap" id="quiz-feed"></div>
+    </section>
+
+    <section id="page-exercices" class="page-view">
+      <div class="ph-row">
+        <div>
+          <h1>Exercices</h1>
+          <p class="tagline">Entraîne-toi sur tes cours avec des exercices personnalisés et une correction détaillée.</p>
+        </div>
+        <button class="btn-pill" type="button" onclick="openExerciseCreator()">✨ Créer un exercice avec l'IA</button>
+      </div>
+
+      <div id="exercise-home-panel" class="exercise-home-panel">
+        <div class="exercise-intro-card">
+          <div class="exercise-intro-icon">✍️</div>
+          <div>
+            <h2>Un entraînement adapté à tes cours</h2>
+            <p class="caption">Choisis une matière, un chapitre, tes ressources et ton mode de réponse. L'IA prépare ensuite un sujet et peut le corriger avec un barème exigeant.</p>
+          </div>
+        </div>
+        <div class="exercise-list-heading">
+          <div>
+            <h2>Mes exercices</h2>
+            <p class="caption">Les exercices sont enregistrés sur cet appareil et ce navigateur.</p>
+          </div>
+        </div>
+        <div id="exercise-saved-list" class="exercise-saved-list">
+          <div class="empty-text">Aucun exercice créé pour le moment.</div>
+        </div>
+      </div>
+
+      <div id="exercise-setup" class="exercise-panel" style="display:none">
+        <div class="exercise-panel-heading">
+          <div>
+            <span class="exercise-step">ÉTAPE 1 · PRÉPARATION</span>
+            <h2>Créer ton exercice</h2>
+            <p class="caption">Les documents fournis servent de contexte à la génération et à la correction.</p>
+          </div>
+          <button class="btn-ghost" type="button" onclick="closeExerciseSetup()">← Retour</button>
+        </div>
+
+        <div class="exercise-form-grid">
+          <div class="input-group">
+            <label for="exercise-subject">Matière *</label>
+            <select id="exercise-subject" onchange="toggleExerciseCustomSubject()"></select>
+            <input type="text" id="exercise-subject-custom" placeholder="Précise la matière…" style="display:none;margin-top:8px">
+          </div>
+          <div class="input-group">
+            <label for="exercise-topic">Chapitre / thème *</label>
+            <input type="text" id="exercise-topic" maxlength="150" placeholder="Ex. : La responsabilité civile, les fonctions…">
+          </div>
+          <div class="input-group">
+            <label for="exercise-count">Nombre de questions</label>
+            <input type="number" id="exercise-count" value="8" min="3" max="15">
+          </div>
+          <div class="input-group">
+            <label for="exercise-details">Consignes supplémentaires à l'IA</label>
+            <textarea id="exercise-details" rows="3" placeholder="Niveau du contrôle, notions à privilégier, type de calculs, consignes du professeur…"></textarea>
+          </div>
+        </div>
+
+        <div class="exercise-subsection">
+          <div class="exercise-subsection-title">
+            <div>
+              <h3>Ressources de référence</h3>
+              <p class="caption">Sélectionne des cours ou quiz que tu as aimés pour les utiliser comme contexte.</p>
+            </div>
+            <button type="button" class="btn-ghost btn-sm" onclick="reloadExerciseLikedSources()">Actualiser</button>
+          </div>
+          <div id="exercise-liked-sources" class="exercise-source-list">
+            <p class="caption">Chargement des ressources aimées…</p>
+          </div>
+        </div>
+
+        <div class="exercise-subsection">
+          <div class="input-group">
+            <label for="exercise-pdf-files">Ajouter des PDF du cours (facultatif)</label>
+            <input type="file" id="exercise-pdf-files" accept=".pdf,application/pdf" multiple onchange="handleExercisePDFSelect(event)">
+            <p class="caption">Le texte des PDF est extrait dans ton navigateur puis transmis au service IA comme contexte. Les fichiers originaux ne sont pas téléversés par cette fonction.</p>
+            <div id="exercise-pdf-status" class="exercise-file-status">Aucun PDF sélectionné.</div>
+          </div>
+        </div>
+
+        <div class="exercise-subsection">
+          <h3>Mode de réponse</h3>
+          <div class="exercise-method-grid">
+            <label class="exercise-method-card active" id="exercise-method-digital-card">
+              <input type="radio" name="exercise-method" value="digital" checked onchange="selectExerciseMethod('digital')">
+              <span class="exercise-method-icon">⌨️</span>
+              <strong>Sur ordinateur ou téléphone</strong>
+              <span class="caption">Réponds directement sous chaque question dans un champ de texte.</span>
+            </label>
+            <label class="exercise-method-card" id="exercise-method-paper-card">
+              <input type="radio" name="exercise-method" value="paper" onchange="selectExerciseMethod('paper')">
+              <span class="exercise-method-icon">📝</span>
+              <strong>Sur feuille papier</strong>
+              <span class="caption">Télécharge le sujet, écris tes réponses puis envoie une ou plusieurs photos de ta copie.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="exercise-subsection">
+          <label class="exercise-timer-toggle">
+            <input type="checkbox" id="exercise-timer-enabled" onchange="toggleExerciseTimer()">
+            <span>
+              <strong>⏱️ Ajouter un chronomètre</strong>
+              <span class="caption">La durée démarre lorsque tu commences l'exercice. Une sonnerie signale la fin du temps.</span>
+            </span>
+          </label>
+          <div id="exercise-timer-options" class="exercise-timer-options" style="display:none">
+            <label for="exercise-timer-minutes">Durée autorisée (minutes)</label>
+            <input type="number" id="exercise-timer-minutes" min="1" max="240" value="60">
+            <span class="caption">De 1 minute à 4 heures maximum.</span>
+          </div>
+        </div>
+
+        <div class="exercise-create-actions">
+          <button class="btn-ghost" type="button" onclick="closeExerciseSetup()">Annuler</button>
+          <button class="btn-pill" type="button" id="exercise-generate-button" onclick="generateAIExercise()">✨ Générer l'exercice</button>
+        </div>
+        <div id="exercise-generation-status" class="exercise-generation-status" style="display:none" aria-live="polite">
+          <div class="spinner"></div>
+          <strong>Préparation de ton exercice…</strong>
+          <span class="caption">L'IA analyse les consignes et les ressources sélectionnées. Cette étape peut prendre un moment.</span>
+        </div>
+      </div>
+
+      <div id="exercise-workspace" class="exercise-panel" style="display:none">
+        <div class="exercise-workspace-top">
+          <button class="btn-ghost btn-sm" type="button" onclick="leaveExerciseWorkspace()">← Mes exercices</button>
+          <div id="exercise-live-timer" class="exercise-live-timer" style="display:none">⏱️ <span id="exercise-timer-display">00:00</span></div>
+        </div>
+        <div id="exercise-preview-state">
+          <span class="exercise-step">ÉTAPE 2 · SUJET</span>
+          <h2 id="exercise-work-title"></h2>
+          <p id="exercise-work-meta" class="caption"></p>
+          <div id="exercise-work-source" class="exercise-context-note"></div>
+          <div id="exercise-preview-questions" class="exercise-question-list"></div>
+          <div class="exercise-create-actions">
+            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">📄 Télécharger le sujet vierge</button>
+            <button class="btn-pill" type="button" onclick="startExerciseAttempt()">Commencer l'exercice →</button>
+          </div>
+        </div>
+
+        <div id="exercise-active-state" style="display:none">
+          <div class="exercise-step">ÉTAPE 3 · RÉPONSES</div>
+          <h2 id="exercise-active-title"></h2>
+          <div id="exercise-digital-answers" class="exercise-question-list" style="display:none"></div>
+          <div id="exercise-paper-answers" class="exercise-paper-area" style="display:none">
+            <div class="exercise-context-note">Télécharge le sujet, réponds sur ta feuille puis photographie toutes les pages de ta copie. Vérifie que les photos sont nettes et lisibles.</div>
+            <div id="exercise-paper-question-sheet" class="exercise-question-list"></div>
+            <div class="exercise-subsection">
+              <button class="btn-utility" type="button" onclick="exportExercisePDF(false)">📄 Télécharger le sujet vierge</button>
+              <div class="input-group mt-2">
+                <label for="exercise-paper-photos">Photos de ta copie</label>
+                <input type="file" id="exercise-paper-photos" accept="image/*" capture="environment" multiple onchange="handleExercisePaperPhotos(event)">
+                <p class="caption">Jusqu'à 6 images. L'IA utilise une reconnaissance de texte pour lire l'écriture ; tu pourras relire et modifier la transcription avant la correction.</p>
+                <div id="exercise-paper-photo-status" class="exercise-file-status">Aucune photo ajoutée.</div>
+                <button class="btn-ghost btn-sm mt-1" type="button" onclick="recognizeExercisePaper()">Lire les photos et préparer la transcription</button>
+              </div>
+              <div class="input-group">
+                <label for="exercise-paper-transcript">Transcription des réponses (modifiable)</label>
+                <textarea id="exercise-paper-transcript" rows="8" placeholder="La transcription des photos apparaîtra ici. Tu peux aussi saisir tes réponses manuellement."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="exercise-create-actions">
+            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">Exporter la copie non corrigée</button>
+            <button class="btn-pill" type="button" onclick="finishExerciseAttempt()">Terminer et m'auto-évaluer →</button>
+          </div>
+          <p class="caption" id="exercise-time-notice"></p>
+        </div>
+
+        <div id="exercise-self-assess" class="exercise-self-assess" style="display:none">
+          <span class="exercise-step">ÉTAPE 4 · AUTO-ÉVALUATION</span>
+          <h2>Comment estimes-tu ton travail ?</h2>
+          <p class="caption">Cette estimation ne modifie pas la note attribuée par la correction IA.</p>
+          <div class="exercise-self-rating-wrap">
+            <label for="exercise-self-rating">Mon ressenti</label>
+            <div class="exercise-rating-line">
+              <input type="range" id="exercise-self-rating" min="1" max="5" value="3" oninput="updateExerciseSelfRating()">
+              <strong id="exercise-self-rating-value">3 / 5</strong>
+            </div>
+            <div class="caption">1 = très difficile · 5 = très à l'aise</div>
+          </div>
+          <div class="input-group">
+            <label for="exercise-self-comment">Ce que tu as trouvé facile ou difficile (facultatif)</label>
+            <textarea id="exercise-self-comment" rows="3" placeholder="Explique brièvement ton ressenti…"></textarea>
+          </div>
+          <div class="exercise-create-actions">
+            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">Exporter la copie non corrigée</button>
+            <button class="btn-pill" id="exercise-correct-button" type="button" onclick="correctAIExercise()">Corriger avec l'IA</button>
+          </div>
+          <div id="exercise-correction-loading" class="exercise-generation-status" style="display:none" aria-live="polite">
+            <div class="spinner"></div>
+            <strong>Correction en cours…</strong>
+            <span class="caption">La copie est évaluée question par question avec un barème strict et neutre. La correction peut prendre du temps.</span>
+          </div>
+        </div>
+
+        <div id="exercise-correction-result" class="exercise-correction-result" style="display:none">
+          <div class="exercise-result-score">
+            <span class="caption">NOTE ATTRIBUÉE</span>
+            <strong id="exercise-result-score-value">— / 20</strong>
+            <span id="exercise-result-score-label"></span>
+          </div>
+          <h2>Correction détaillée</h2>
+          <div id="exercise-result-general" class="exercise-context-note"></div>
+          <div id="exercise-result-strengths" class="exercise-result-columns"></div>
+          <div id="exercise-result-questions" class="exercise-question-list"></div>
+          <div class="exercise-create-actions">
+            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">📄 Exporter sans correction</button>
+            <button class="btn-pill" type="button" onclick="exportExercisePDF(true)">📄 Exporter avec la correction</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="page-creerquiz" class="page-view">
@@ -713,21 +918,6 @@
         </div>
 
         <div class="settings-sec">
-          <h3>🔔 Notifications Push</h3>
-          <div class="setting-row">
-            <div>
-              <div class="setting-label">Recevoir des notifications push</div>
-              <div class="setting-desc">Alertes directement sur cet appareil, même quand l'onglet est fermé</div>
-            </div>
-            <label class="tog">
-              <input type="checkbox" id="tog-push-notif" onchange="togglePushNotifs(this.checked)">
-              <div class="tog-track"></div>
-              <div class="tog-thumb"></div>
-            </label>
-          </div>
-        </div>
-
-        <div class="settings-sec">
           <h3>📜 Historique Quiz IA</h3>
           <p class="setting-desc" style="margin-bottom:12px;">Retrouve ici les quiz que tu as générés avec l'IA.</p>
           <div id="settings-ai-quiz-history" style="display:flex; flex-direction:column; gap:10px; max-height:300px; overflow-y:auto;">
@@ -777,7 +967,6 @@
           <span id="admin-mod-dot" style="display:none; width:10px; height:10px; background:var(--danger); border-radius:50%; position:absolute; top:8px; right:6px;"></span>
         </button>
         <button class="tk-tab" data-adm-tab="maintenance" onclick="switchAdminTab('maintenance')" style="padding:12px 20px; font-size:16px;">Maintenance</button>
-        <button class="tk-tab" data-adm-tab="notifications" onclick="switchAdminTab('notifications')" style="padding:12px 20px; font-size:16px;">Notifications</button>
       </div>
 
       <div id="adm-view-membres" class="adm-tab-content">
@@ -871,22 +1060,6 @@
       <textarea id="adm-maintenance-message" rows="3" placeholder="DnB Reviz est actuellement en maintenance. Nous serons de retour très bientôt, merci de ta patience !" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink); resize:vertical;"></textarea>
     </div>
     <button class="btn-pill mt-2" onclick="saveMaintenanceSettings(document.getElementById('adm-maintenance-toggle').checked)">Enregistrer le message</button>
-  </div>
-</div>
-<div id="adm-view-notifications" class="adm-tab-content" style="display:none;">
-  <div class="settings-sec" style="max-width:560px;">
-    <h3>🔔 Envoyer une notification push</h3>
-    <p class="setting-desc" style="margin-bottom:16px;">Envoyée à tous les membres ayant activé les notifications push dans leurs paramètres.</p>
-    <div class="input-group">
-      <label>Titre</label>
-      <input type="text" id="adm-push-title" placeholder="Ex : Nouveau quiz disponible !" maxlength="65" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink);">
-    </div>
-    <div class="input-group mt-2">
-      <label>Message</label>
-      <textarea id="adm-push-body" rows="3" maxlength="200" placeholder="Le contenu de la notification..." style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--hl); font-family:inherit; outline:none; background:var(--input-bg); color:var(--ink); resize:vertical;"></textarea>
-    </div>
-    <button class="btn-pill mt-2" id="adm-push-send-btn" onclick="sendAdminPushNotification()">Envoyer la notification</button>
-    <p id="adm-push-status" class="setting-desc" style="margin-top:10px;"></p>
   </div>
 </div>
     </section>
@@ -995,6 +1168,32 @@
           <table class="stats-table">
             <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Dernière connexion</th><th>Sessions</th><th>Dernière page</th><th>Zone</th></tr></thead>
             <tbody id="stats-users-tbody"><tr><td colspan="6" class="stats-empty">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="stats-card" style="margin-top:20px;">
+        <div class="stats-card-head stats-users-head">
+          <div><span class="stats-section-label">TEMPS TOTAL · ADMIN</span><h3>Classement des élèves</h3><p class="caption">Temps actif cumulé sur DnB Reviz depuis la mise en place de cette collecte.</p></div>
+          <span class="stats-card-badge">cumulatif</span>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Rang</th><th>Élève</th><th>Temps total</th><th>Sessions</th><th>Pages</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Dernière activité</th></tr></thead>
+            <tbody id="stats-lifetime-ranking-tbody"><tr><td colspan="8" class="stats-empty">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="stats-card" style="margin-top:20px;">
+        <div class="stats-card-head stats-users-head">
+          <div><span class="stats-section-label">ACTIVITÉ · PÉRIODE</span><h3>Engagement par élève</h3><p class="caption">Temps actif, navigation, quiz et interactions enregistrées sur la période sélectionnée.</p></div>
+          <div class="stats-user-actions"><input id="stats-activity-search" class="stats-search" type="search" placeholder="Rechercher un élève…" oninput="renderActivityRanking()"></div>
+        </div>
+        <div class="stats-table-wrap">
+          <table class="stats-table">
+            <thead><tr><th>Rang</th><th>Élève</th><th>Temps</th><th>Sessions</th><th>Pages</th><th>Quiz démarrés</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Recherches</th><th>Dernière activité</th></tr></thead>
+            <tbody id="stats-activity-ranking-tbody"><tr><td colspan="10" class="stats-empty">Chargement…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1133,16 +1332,6 @@
   </div>
 </div>
 
-<div id="m-push-consent" class="moverlay">
-  <div class="mbox">
-    <h2>🔔 Activer les notifications ?</h2>
-    <p id="push-consent-text" class="caption mt-1" style="margin-bottom:20px">Reçois les rappels et informations importantes de DnB Reviz directement sur cet appareil.</p>
-    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
-      <button class="btn-ghost" type="button" onclick="handlePushConsent(false)">Non, merci</button>
-      <button class="btn-pill" type="button" onclick="handlePushConsent(true)">Oui, activer</button>
-    </div>
-  </div>
-</div>
 
 <div id="m-force-pwd" class="moverlay">
   <div class="mbox">

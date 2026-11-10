@@ -22,7 +22,6 @@ window.emailjs.init("2VkygefcXxbSOlhFX");
 const GROQ_API_URL = "https://groqrelay.greninja71144.workers.dev";
 const GROQ_MODEL   = "openai/gpt-oss-120b"; 
 
-const ADMIN_PUSH_ENDPOINT = "https://groqrelay.greninja71144.workers.dev/onesignal";
 
 const LOGIN_MAX_ATTEMPTS = 5;
 const LOGIN_LOCK_MS = 30000;
@@ -30,138 +29,6 @@ let loginFailedAttempts = 0;
 let loginLockedUntil = 0;
 
 
-function withOneSignal(callback, timeoutMs = 30000) {
-  const ready = window.dnbOneSignalReady || new Promise((resolve, reject) => {
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(async function(OneSignal) {
-      try {
-        resolve(OneSignal);
-      } catch (error) {
-        reject(error);
-      }
-    });
-  });
-
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error("ONESIGNAL_TIMEOUT"));
-    }, timeoutMs);
-
-    ready.then(async (OneSignal) => {
-      if (settled) return;
-      try {
-        const result = await callback(OneSignal);
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(result);
-      } catch (error) {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        reject(error);
-      }
-    }).catch(error => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      reject(error);
-    });
-  });
-}
-
-let oneSignalPushListenerRegistered = false;
-
-function setPushToggleState(enabled) {
-  const checkbox = document.getElementById("tog-push-notif");
-  if (checkbox) checkbox.checked = !!enabled;
-}
-
-function setLocalPushState(enabled, subscriptionId = null) {
-  if (!currentUser) return;
-
-  currentUser.pushEnabled = !!enabled;
-  currentUser.oneSignalSubscriptionId = subscriptionId || null;
-
-  try {
-    saveSessionLocally(currentUser);
-  } catch (error) {
-    console.warn("Impossible de mettre à jour la session locale :", error);
-  }
-
-  setPushToggleState(enabled);
-}
-
-function registerOneSignalPushListener() {
-  if (oneSignalPushListenerRegistered) return;
-  oneSignalPushListenerRegistered = true;
-
-  withOneSignal(async (OneSignal) => {
-    OneSignal.User.PushSubscription.addEventListener("change", (event) => {
-      const subscription = event?.current || OneSignal.User.PushSubscription;
-      const optedIn = !!subscription?.optedIn;
-      const subscriptionId = subscription?.id || null;
-
-      setLocalPushState(optedIn, subscriptionId);
-    });
-  }).catch(error => {
-    oneSignalPushListenerRegistered = false;
-    console.error("Erreur d'initialisation du listener OneSignal :", error);
-  });
-}
-
-async function getOneSignalPushState() {
-  return withOneSignal(async (OneSignal) => {
-    const subscription = OneSignal.User.PushSubscription;
-    return {
-      supported: OneSignal.Notifications.isPushSupported(),
-      optedIn: !!subscription?.optedIn,
-      subscriptionId: subscription?.id || null,
-      permission: OneSignal.Notifications.permission || null
-    };
-  });
-}
-
-async function waitForOneSignalSubscription(timeoutMs = 5000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const state = await getOneSignalPushState();
-
-    if (state.optedIn && state.subscriptionId) {
-      return state;
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 250));
-  }
-
-  return getOneSignalPushState();
-}
-
-async function syncOneSignalUser(u) {
-  if (!u?.id) return;
-
-  try {
-    await withOneSignal(async (OneSignal) => {
-      await OneSignal.login(String(u.id));
-      registerOneSignalPushListener();
-
-      const supported = OneSignal.Notifications.isPushSupported();
-      if (!supported) {
-        setLocalPushState(false, null);
-        return;
-      }
-
-      const subscription = OneSignal.User.PushSubscription;
-      setLocalPushState(!!subscription?.optedIn, subscription?.id || null);
-    });
-  } catch (error) {
-    console.error("Erreur de synchronisation du compte OneSignal :", error);
-  }
-}
 
 window.currentUser = null;
 
@@ -255,8 +122,11 @@ window._allAdminUsers = [];
 window._analyticsSessionId = null;
 window._analyticsSessionUserId = null;
 window._analyticsHeartbeatTimer = null;
+window._activityState = null;
+window._activityTimer = null;
+window._activityFlushTimer = null;
 window._statisticsCharts = {};
-window._statisticsCache = { users: [], sessions: [], events: [], daily: [], hourly: [], concurrent: [] };
+window._statisticsCache = { users: [], sessions: [], events: [], daily: [], hourly: [], concurrent: [], activity: [], activityLifetime: [] };
 
 const GA_MEASUREMENT_ID = window.DNB_GA_MEASUREMENT_ID || "";
 let _gaReady = false;
@@ -296,6 +166,19 @@ function analyticsSessionIdForUser(user) {
   window._analyticsSessionId = `${user.id}_${Date.now()}_${Math.random().toString(36).slice(2,10)}`;
   return window._analyticsSessionId;
 }
+function activityStorageKey(userId) { return `dnb_activity_${String(userId || "")}`; }
+function createActivityState(user) { const now=Date.now(); return { userId:String(user?.id||""), username:String(user?.username||user?.id||""), role:String(user?.role||""), sessionId:`${String(user?.id||"")}_${now}`, durationMs:0, pageViews:0, quizStarts:0, quizCompletes:0, aiQuizGenerations:0, searches:0, likes:0, comments:0, shares:0, postsViewed:0, postsCreated:0, lastPage:"", lastActivity:now, lastTick:now }; }
+function loadActivityState(user) { const fresh=createActivityState(user); try { const raw=localStorage.getItem(activityStorageKey(user?.id)); if(!raw)return fresh; const old=JSON.parse(raw); return { ...fresh, ...old, sessionId:fresh.sessionId, lastTick:Date.now() }; } catch(_) { return fresh; } }
+function saveActivityState() { const st=window._activityState; if(!st?.userId)return; try{localStorage.setItem(activityStorageKey(st.userId),JSON.stringify(st));}catch(_){} }
+function tickActivity() { const st=window._activityState; if(!st||!currentUser?.id||currentUser.id!==st.userId)return; const now=Date.now(); const delta=Math.max(0,now-Number(st.lastTick||now)); if(document.visibilityState==="visible") st.durationMs+=Math.min(delta,120000); st.lastTick=now; st.lastActivity=now; saveActivityState(); }
+async function flushActivity(reason="periodic") { const st=window._activityState; if(!st?.userId)return; tickActivity(); const payload={...st,flushReason:String(reason),timestamp:Date.now()}; delete payload.lastTick; try { await setDoc(doc(db,"analytics_activity",`${st.userId}_${st.sessionId}`),payload,{merge:true}); localStorage.removeItem(activityStorageKey(st.userId)); } catch(error) { saveActivityState(); console.debug("Activité non synchronisée :",error?.code||error?.message||error); } }
+function initLocalActivityTracking(user) { if(!user?.id)return; if(window._activityState?.userId===String(user.id) && window._activityState.sessionId) return; if(window._activityTimer)clearInterval(window._activityTimer); if(window._activityFlushTimer)clearInterval(window._activityFlushTimer); window._activityState=loadActivityState(user); window._activityTimer=setInterval(tickActivity,15000); window._activityFlushTimer=setInterval(()=>void flushActivity("interval"),60000); tickActivity(); }
+function trackActivityPage(page) { const st=window._activityState;if(!st)return;st.lastPage=String(page||"");st.pageViews++;st.lastActivity=Date.now();saveActivityState(); }
+function trackActivityEvent(type) { const st=window._activityState;if(!st)return; const k=String(type||""); if(k==="quiz_start")st.quizStarts++; else if(k==="quiz_complete")st.quizCompletes++; else if(k==="ai_quiz_generated")st.aiQuizGenerations++; else if(k==="search")st.searches++; else if(k==="like")st.likes++; else if(k==="comment")st.comments++; else if(k==="share")st.shares++; else if(k==="post_view")st.postsViewed++; else if(k==="post_create")st.postsCreated++; st.lastActivity=Date.now();saveActivityState(); }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") void flushActivity("hidden"); else if(window._activityState) window._activityState.lastTick=Date.now(); });
+window.addEventListener("pagehide",()=>void flushActivity("pagehide"));
+window.addEventListener("beforeunload",()=>tickActivity());
+
 async function recordAnalyticsEvent(type, payload = {}) {
   if (!currentUser?.id) return;
   try {
@@ -317,6 +200,7 @@ async function recordAnalyticsEvent(type, payload = {}) {
 }
 async function startAnalyticsSession(user) {
   if (!user?.id) return;
+  initLocalActivityTracking(user);
   const sessionId = analyticsSessionIdForUser(user);
   const shouldStart = !window._analyticsHeartbeatTimer;
   try {
@@ -342,6 +226,7 @@ async function startAnalyticsSession(user) {
   if (shouldStart) recordAnalyticsEvent("login", { sessionId });
 }
 async function endAnalyticsSession() {
+  await flushActivity("logout");
   const id = window._analyticsSessionId;
   if (!id) return;
   if (window._analyticsHeartbeatTimer) clearInterval(window._analyticsHeartbeatTimer);
@@ -619,55 +504,6 @@ window.saveMaintenanceSettings = async (activate) => {
   }
 };
 
-window.sendAdminPushNotification = async () => {
-  const isAdmin = currentUser && (currentUser.role === 'admin' || (currentUser.subRoles && currentUser.subRoles.includes('admin')));
-  if (!isAdmin) { showToast("Accès non autorisé."); return; }
-
-  const title = document.getElementById("adm-push-title")?.value.trim() || "";
-  const body  = document.getElementById("adm-push-body")?.value.trim() || "";
-  const statusEl = document.getElementById("adm-push-status");
-  const btn = document.getElementById("adm-push-send-btn");
-
-  if (!title || !body) {
-    showToast("Renseigne un titre et un message.");
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.innerText = "Envoi en cours..."; }
-  if (statusEl) statusEl.innerText = "";
-
-  try {
-    const res = await fetch(ADMIN_PUSH_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        app_id: "d0900059-082b-458f-9bb1-8798546b8010",
-        title,
-        body,
-        url: "https://dnb-95.github.io/home/"
-      })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Erreur serveur");
-
-    if (data.sent > 0) {
-      showToast(`Notification envoyée à ${data.sent} abonné(s) ✓`);
-      if (statusEl) statusEl.innerText = `${data.sent} notification(s) envoyée(s) ✓`;
-    } else {
-      showToast("Aucun utilisateur n'a activé les notifications push.");
-      if (statusEl) statusEl.innerText = "Aucun utilisateur n'est actuellement abonné aux notifications push.";
-    }
-
-    document.getElementById("adm-push-title").value = "";
-    document.getElementById("adm-push-body").value = "";
-  } catch (e) {
-    console.error("Erreur notification push :", e);
-    showToast("Erreur lors de l'envoi de la notification.");
-    if (statusEl) statusEl.innerText = e?.message ? `Erreur : ${e.message}` : "Une erreur est survenue lors de l'envoi.";
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerText = "Envoyer la notification"; }
-  }
-};
 
 async function migrateOldPosts() {
 try {
@@ -860,32 +696,39 @@ function renderStatisticsPages(events){
   const rows=Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,18),max=rows[0]?.[1]||1;
   el.innerHTML=rows.length?rows.map(([p,n])=>`<div class="stats-page-item"><strong>${esc(p)}</strong><div class="caption">${n} vue${n>1?"s":""}</div><div class="bar" style="width:${Math.max(8,Math.round(n/max*100))}%"></div></div>`).join(""):'<div class="stats-empty">Aucune donnée de navigation.</div>';
 }
+function formatActivityDuration(ms){const min=Math.max(0,Math.round(Number(ms||0)/60000));const h=Math.floor(min/60),m=min%60;return h?`${h}h ${String(m).padStart(2,"0")}min`:`${m} min`;}
+function aggregateActivity(docs,users,since=0){const map=new Map();const ensure=(id,f={})=>{const k=String(id||f.id||"");if(!k)return null;if(!map.has(k))map.set(k,{id:k,username:f.username||k,role:f.role||"",durationMs:0,sessions:0,pageViews:0,quizStarts:0,quizCompletes:0,aiQuizGenerations:0,searches:0,likes:0,comments:0,shares:0,postsViewed:0,postsCreated:0,lastActivity:0});return map.get(k);};users.forEach(u=>ensure(u.id,u));docs.forEach(a=>{const r=ensure(a.userId,a);if(!r)return;const ts=Number(a.timestamp||0);r.lastActivity=Math.max(r.lastActivity,ts);if(ts<since)return;r.sessions++;r.durationMs+=Number(a.durationMs||0);r.pageViews+=Number(a.pageViews||0);r.quizStarts+=Number(a.quizStarts||0);r.quizCompletes+=Number(a.quizCompletes||0);r.aiQuizGenerations+=Number(a.aiQuizGenerations||0);r.searches+=Number(a.searches||0);r.likes+=Number(a.likes||0);r.comments+=Number(a.comments||0);r.shares+=Number(a.shares||0);r.postsViewed+=Number(a.postsViewed||0);r.postsCreated+=Number(a.postsCreated||0);});return [...map.values()];}
+function renderLifetimeActivityRanking(){const tb=document.getElementById("stats-lifetime-ranking-tbody");if(!tb)return;const rows=[...(window._statisticsCache.activityLifetime||[])].filter(r=>r.role!=="professeur"&&r.role!=="admin").sort((a,b)=>b.durationMs-a.durationMs);tb.innerHTML=rows.length?rows.slice(0,200).map((r,i)=>`<tr><td><strong>#${i+1}</strong></td><td><strong>@${esc(r.username||r.id)}</strong></td><td>${formatActivityDuration(r.durationMs)}</td><td>${r.sessions}</td><td>${r.pageViews}</td><td>${r.quizCompletes}</td><td>${r.aiQuizGenerations}</td><td>${formatStatsDate(r.lastActivity)}</td></tr>`).join(""):'<tr><td colspan="8" class="stats-empty">Aucune donnée.</td></tr>';}
+function renderActivityRanking(){const tb=document.getElementById("stats-activity-ranking-tbody");if(!tb)return;const q=(document.getElementById("stats-activity-search")?.value||"").toLowerCase().trim();const rows=[...(window._statisticsCache.activity||[])].filter(r=>r.role!=="professeur"&&r.role!=="admin"&&(!q||String(r.username||"").toLowerCase().includes(q))).sort((a,b)=>b.durationMs-a.durationMs);tb.innerHTML=rows.length?rows.slice(0,200).map((r,i)=>`<tr><td><strong>#${i+1}</strong></td><td><strong>@${esc(r.username||r.id)}</strong></td><td>${formatActivityDuration(r.durationMs)}</td><td>${r.sessions}</td><td>${r.pageViews}</td><td>${r.quizStarts}</td><td>${r.quizCompletes}</td><td>${r.aiQuizGenerations}</td><td>${r.searches}</td><td>${formatStatsDate(r.lastActivity)}</td></tr>`).join(""):'<tr><td colspan="10" class="stats-empty">Aucune donnée.</td></tr>';}
+
 window.loadStatisticsDashboard=async()=>{
   if(!isAdminUser(currentUser)){showToast("Accès non autorisé.");window.location.hash="#accueil";return;}
   const status=document.getElementById("stats-status"),rangeDays=Math.max(1,Number(document.getElementById("stats-range")?.value||7)),since=Date.now()-rangeDays*86400000;
   if(status)status.textContent="Chargement des statistiques…";
   try{
-    const [usersSnap,sessionsSnap,eventsSnap]=await Promise.all([
+    const [usersSnap,sessionsSnap,eventsSnap,activitySnap]=await Promise.all([
       getDocs(collection(db,"users")),
       getDocs(query(collection(db,"analytics_sessions"),where("startedAt",">=",since))),
-      getDocs(query(collection(db,"analytics_events"),where("timestamp",">=",since)))
+      getDocs(query(collection(db,"analytics_events"),where("timestamp",">=",since))),
+      getDocs(collection(db,"analytics_activity"))
     ]);
-    const users=[],sessions=[],events=[];usersSnap.forEach(d=>users.push({id:d.id,...d.data()}));sessionsSnap.forEach(d=>sessions.push({id:d.id,...d.data()}));eventsSnap.forEach(d=>events.push({id:d.id,...d.data()}));
+    const users=[],sessions=[],events=[],activityDocs=[];usersSnap.forEach(d=>users.push({id:d.id,...d.data()}));sessionsSnap.forEach(d=>sessions.push({id:d.id,...d.data()}));eventsSnap.forEach(d=>events.push({id:d.id,...d.data()}));activitySnap.forEach(d=>activityDocs.push({id:d.id,...d.data()}));
     const perUser=new Map();users.forEach(u=>perUser.set(u.id,{id:u.id,username:u.username||u.id,role:u.role||"—",sessions:0,lastLogin:0,lastPage:"—",timezone:"—",countryHint:""}));
     sessions.forEach(s=>{const u=perUser.get(s.userId)||{id:s.userId,username:s.username||s.userId,role:s.role||"—",sessions:0,lastLogin:0,lastPage:"—",timezone:s.timezone||"—",countryHint:s.countryHint||""};u.sessions++;u.lastLogin=Math.max(u.lastLogin||0,Number(s.startedAt||0));u.timezone=s.timezone||u.timezone;u.countryHint=s.countryHint||u.countryHint;perUser.set(s.userId,u);});
     events.filter(e=>e.type==="login").forEach(e=>{const u=perUser.get(e.userId)||{id:e.userId,username:e.username||e.userId,role:e.role||"—",sessions:0,lastLogin:0,lastPage:"—",timezone:e.timezone||"—",countryHint:e.countryHint||""};u.lastLogin=Math.max(u.lastLogin||0,Number(e.timestamp||0));u.timezone=e.timezone||u.timezone;u.countryHint=e.countryHint||u.countryHint;perUser.set(e.userId,u);});
     events.filter(e=>e.type==="page_view").forEach(e=>{const u=perUser.get(e.userId);if(u&&Number(e.timestamp||0)>=Number(u.lastLogin||0))u.lastPage=e.page||u.lastPage;});
     const userRows=Array.from(perUser.values()).sort((a,b)=>(b.lastLogin||0)-(a.lastLogin||0));
+    const activity=aggregateActivity(activityDocs,users,since),activityLifetime=aggregateActivity(activityDocs,users,0);
     const hourly=buildHourlyConnectionData(events),concurrent=buildConcurrentByHour(sessions),daily=buildDailyData(events,rangeDays);
     const liveCutoff=Date.now()-3*60*1000,live=sessions.filter(s=>Number(s.lastSeenAt||0)>=liveCutoff&&!s.endedAt).length,views=events.filter(e=>e.type==="page_view").length,peak=Math.max(0,...concurrent);
-    window._statisticsCache={users:userRows,sessions,events,hourly,concurrent,daily};
+    window._statisticsCache={users:userRows,sessions,events,hourly,concurrent,daily,activity,activityLifetime};
     document.getElementById("stats-kpi-users").textContent=users.length;
     document.getElementById("stats-kpi-sessions").textContent=sessions.length;
     document.getElementById("stats-kpi-logins").textContent=events.filter(e=>e.type==="login").length;
     document.getElementById("stats-kpi-peak").textContent=peak;
     document.getElementById("stats-kpi-live").textContent=live;
     document.getElementById("stats-kpi-views").textContent=views;
-    renderStatisticsUsers();renderStatisticsTimezones(userRows);renderStatisticsPages(events);destroyStatsCharts();
+    renderStatisticsUsers();renderStatisticsTimezones(userRows);renderStatisticsPages(events);renderLifetimeActivityRanking();renderActivityRanking();destroyStatsCharts();
     if(window.Chart){
       const opts=chartDefaults();
       window._statisticsCharts.hourly=new Chart(document.getElementById("stats-hourly-chart"),{type:"bar",data:{labels:Array.from({length:24},(_,i)=>`${String(i).padStart(2,"0")}h`),datasets:[{label:"Connexions",data:hourly,backgroundColor:"rgba(0,122,255,.72)",borderRadius:7,borderSkipped:false,maxBarThickness:20}]},options:opts});
@@ -898,7 +741,7 @@ window.loadStatisticsDashboard=async()=>{
     if(status)status.textContent=`Données internes : ${rangeDays} jour${rangeDays>1?"s":""}. Dernière actualisation ${formatStatsDate(Date.now())}.`;
   }catch(error){console.error("Erreur statistiques :",error);if(status)status.textContent="Impossible de charger les statistiques. Vérifie les règles Firestore pour analytics_events et analytics_sessions.";showToast("Statistiques indisponibles.");}
 };
-function statisticsExportPayload(){return{generatedAt:new Date().toISOString(),rangeDays:Number(document.getElementById("stats-range")?.value||7),summary:{users:document.getElementById("stats-kpi-users")?.textContent||"0",sessions:document.getElementById("stats-kpi-sessions")?.textContent||"0",logins:document.getElementById("stats-kpi-logins")?.textContent||"0",peakConcurrent:document.getElementById("stats-kpi-peak")?.textContent||"0",liveNow:document.getElementById("stats-kpi-live")?.textContent||"0",pageViews:document.getElementById("stats-kpi-views")?.textContent||"0"},hourlyConnections:window._statisticsCache.hourly||[],concurrentByHour:window._statisticsCache.concurrent||[],daily:window._statisticsCache.daily||{},users:window._statisticsCache.users||[],sessions:window._statisticsCache.sessions||[],events:window._statisticsCache.events||[]};}
+function statisticsExportPayload(){return{generatedAt:new Date().toISOString(),rangeDays:Number(document.getElementById("stats-range")?.value||7),summary:{users:document.getElementById("stats-kpi-users")?.textContent||"0",sessions:document.getElementById("stats-kpi-sessions")?.textContent||"0",logins:document.getElementById("stats-kpi-logins")?.textContent||"0",peakConcurrent:document.getElementById("stats-kpi-peak")?.textContent||"0",liveNow:document.getElementById("stats-kpi-live")?.textContent||"0",pageViews:document.getElementById("stats-kpi-views")?.textContent||"0"},hourlyConnections:window._statisticsCache.hourly||[],concurrentByHour:window._statisticsCache.concurrent||[],daily:window._statisticsCache.daily||{},users:window._statisticsCache.users||[],sessions:window._statisticsCache.sessions||[],events:window._statisticsCache.events||[],activity:window._statisticsCache.activity||[],activityLifetime:window._statisticsCache.activityLifetime||[]};}
 window.exportStatisticsJSON=()=>{if(!isAdminUser(currentUser))return showToast("Accès non autorisé.");const blob=new Blob([JSON.stringify(statisticsExportPayload(),null,2)],{type:"application/json;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`dnb-statistiques-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);};
 window.exportStatisticsPDF=()=>{if(!isAdminUser(currentUser))return showToast("Accès non autorisé.");if(!window.jspdf?.jsPDF)return showToast("Le module PDF n'est pas disponible.");const{jsPDF}=window.jspdf,p=statisticsExportPayload(),doc=new jsPDF({unit:"mm",format:"a4"});doc.setFontSize(20);doc.text("DnB Reviz — Rapport statistiques",14,18);doc.setFontSize(10);doc.text(`Généré le ${new Date().toLocaleString("fr-FR")} · Période: ${p.rangeDays} jour(s)`,14,25);let y=35;doc.setFontSize(12);[`Utilisateurs connus : ${p.summary.users}`,`Sessions : ${p.summary.sessions}`,`Connexions : ${p.summary.logins}`,`Pic de connectés estimé : ${p.summary.peakConcurrent}`,`Connectés maintenant : ${p.summary.liveNow}`,`Pages vues : ${p.summary.pageViews}`].forEach(t=>{doc.text(t,14,y);y+=7;});y+=4;doc.setFontSize(14);doc.text("Connexions par heure",14,y);y+=7;doc.setFontSize(10);for(let i=0;i<24;i+=4){const row=[0,1,2,3].map(j=>{const h=i+j;return`${String(h).padStart(2,"0")}h: ${p.hourlyConnections[h]||0}`;}).join("    ");doc.text(row,14,y);y+=6;}y+=4;doc.setFontSize(14);doc.text("Utilisateurs",14,y);y+=7;doc.setFontSize(9);(p.users||[]).slice(0,30).forEach(u=>{const line=`@${u.username||u.id} · ${u.role||"—"} · ${formatStatsDate(u.lastLogin)} · ${u.sessions||0} session(s) · ${[u.timezone,u.countryHint].filter(Boolean).join(" · ")||"—"}`;const wrapped=doc.splitTextToSize(line,180);if(y>275){doc.addPage();y=18;}doc.text(wrapped,14,y);y+=5*wrapped.length;});doc.save(`dnb-statistiques-${new Date().toISOString().slice(0,10)}.pdf`);};
 
@@ -913,7 +756,7 @@ function handleHashChange() {
 
   const target = decodeURIComponent(hash.substring(1)).toLowerCase().trim();
   const internalTargets = new Set([
-    'accueil', 'classement', 'cours', 'fichesrev', 'quiz', 'creerquiz',
+    'accueil', 'classement', 'cours', 'fichesrev', 'quiz', 'exercices', 'creerquiz',
     'messages', 'depot', 'pub-profil', 'profil', 'setting', 'admin', 'statistiques'
   ]);
 
@@ -972,9 +815,11 @@ function showInternalView(target) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   sendGoogleAnalyticsPageView(target);
   recordAnalyticsEvent("page_view", { page: analyticsSafeText(target) });
+  trackActivityPage(target);
 
   if (target === 'messages') loadDMChats();
   if (target === 'quiz') loadQuizFeed();
+  if (target === 'exercices') loadExercisesUI();
   if (target === 'setting') { loadAIQuizHistory(); loadAnimationsSetting(); }
   if (target === 'cours') loadCoursFeed();
   if (target === 'fichesrev') loadFRFeed();
@@ -992,19 +837,11 @@ function showInternalView(target) {
   if (target === 'statistiques') loadStatisticsDashboard();
 }
 
-async function restoreSavedSession() {
+signInAnonymously(auth).then(async () => {
   const s = localStorage.getItem("dnb_reviz_session");
-  if (!s) {
-    handleHashChange();
-    return;
-  }
-
-  try {
+  if (s) {
     const cached = JSON.parse(s);
-    if (!cached?.id) throw new Error("SESSION_INVALID");
-
-    hydrateSession(cached);
-
+    hydrateSession(cached, { skipStreakCheck: true });
     try {
       const freshSnap = await getDoc(doc(db, "users", cached.id));
       if (freshSnap.exists()) {
@@ -1013,18 +850,9 @@ async function restoreSavedSession() {
     } catch(e) {
       console.error(e);
     }
-  } catch (e) {
-    console.error("Impossible de restaurer la session locale :", e);
-    localStorage.removeItem("dnb_reviz_session");
   }
-
   handleHashChange();
-}
-
-// La restauration de session ne dépend plus de l'authentification anonyme.
-// Firebase Anonymous Auth continue de s'initialiser en parallèle comme avant.
-restoreSavedSession();
-signInAnonymously(auth).catch(console.error);
+}).catch(console.error);
 
 window.handleLogin = async () => {
   const now = Date.now();
@@ -1088,31 +916,6 @@ window.handleLogout = async () => {
     localStorage.removeItem("dnb_reviz_session");
   } catch (error) {
     console.warn("Impossible de supprimer la session locale :", error);
-  }
-
-  try {
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    const cleanup = withOneSignal(async (OneSignal) => {
-      try {
-        if (OneSignal.User?.PushSubscription?.optOut) {
-          await OneSignal.User.PushSubscription.optOut();
-        }
-      } catch (error) {
-        console.warn("Impossible de désactiver temporairement le Push à la déconnexion :", error);
-      }
-
-      try {
-        if (OneSignal.logout) {
-          await OneSignal.logout();
-        }
-      } catch (error) {
-        console.warn("Impossible de déconnecter l'identité OneSignal :", error);
-      }
-    }, 1200);
-
-    cleanup.catch(error => console.warn("Nettoyage OneSignal ignoré :", error));
-  } catch (error) {
-    console.warn("Nettoyage OneSignal indisponible :", error);
   }
 
   try {
@@ -1602,19 +1405,18 @@ async function checkStreak(u) {
   scheduleNextStreakDay();
 }
 
-function hydrateSession(u) {
+function hydrateSession(u, options = {}) {
   window.currentUser = u;
   saveSessionLocally(u);
   updateRichTextToolbarVisibility();
   initGoogleAnalytics();
   startAnalyticsSession(u);
-  registerOneSignalPushListener();
 
   document.getElementById("view-login").style.display = "none";
   document.getElementById("view-app").style.display = "block";
   const streakCard = document.getElementById("home-streak-card");
   if (streakCard) streakCard.style.display = isProfessorUser(u) ? "none" : "";
-  checkStreak(u).catch(error => console.error("Erreur du système de série :", error));
+  if (!options.skipStreakCheck) checkStreak(u).catch(error => console.error("Erreur du système de série :", error));
   window.applyMaintenanceUI();
   loadTheme();
 
@@ -1651,10 +1453,6 @@ function hydrateSession(u) {
   }
   if (document.getElementById("tog-email-notif")) {
     document.getElementById("tog-email-notif").checked = !!u.emailNotifs;
-  }
-  if (document.getElementById("tog-push-notif")) {
-    setPushToggleState(false);
-    syncOneSignalUser(u).catch(error => console.error("Erreur de synchronisation Push :", error));
   }
   if (document.getElementById("setting-email")) {
     document.getElementById("setting-email").value = u.email || "";
@@ -1775,75 +1573,11 @@ window.handleForcePwd = async () => {
   if (e) currentUser.email = e;
   saveSessionLocally(currentUser);
   closeModal("m-force-pwd");
-  showToast(e ? "Mot de passe mis à jour ✓ Pense à activer les notifications dans les paramètres." : "Mot de passe mis à jour ✓");
+  showToast("Mot de passe mis à jour ✓");
 
   // Le pré-prompt maison apparaît uniquement après la définition du mot de passe définitif.
-  setTimeout(() => showPushConsentPrompt(currentUser), 250);
 };
 
-function isIOSDevice() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-function isStandaloneWebApp() {
-  return window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
-}
-
-async function showPushConsentPrompt(user = currentUser) {
-  if (!user?.id) return;
-  const modal = document.getElementById("m-push-consent");
-  const text = document.getElementById("push-consent-text");
-  if (!modal) return;
-
-  const shownKey = `dnb_push_consent_prompt_${user.id}`;
-  if (localStorage.getItem(shownKey) === "1") return;
-
-  try {
-    const state = await getOneSignalPushState();
-    if (!state.supported || state.optedIn || state.permission === "denied") {
-      localStorage.setItem(shownKey, "1");
-      return;
-    }
-  } catch (error) {
-    console.warn("État OneSignal indisponible pour le pré-prompt :", error);
-  }
-
-  if (text && isIOSDevice() && !isStandaloneWebApp()) {
-    text.textContent = "Sur iPhone/iPad, ajoute d'abord DnB Reviz à l'écran d'accueil puis ouvre l'application depuis son icône. Tu pourras ensuite activer les notifications.";
-  }
-
-  modal.dataset.userId = String(user.id);
-  modal.classList.add("active");
-}
-
-window.handlePushConsent = async (accepted) => {
-  const modal = document.getElementById("m-push-consent");
-  const userId = modal?.dataset.userId || currentUser?.id;
-  closeModal("m-push-consent");
-
-  if (!userId || !currentUser?.id) return;
-
-  const shownKey = `dnb_push_consent_prompt_${userId}`;
-
-  if (!accepted) {
-    localStorage.setItem(shownKey, "1");
-    return;
-  }
-
-  if (isIOSDevice() && !isStandaloneWebApp()) {
-    showToast("Sur iPhone/iPad, ajoute DnB Reviz à l'écran d'accueil puis ouvre l'app pour activer les notifications.");
-    return;
-  }
-
-  localStorage.setItem(shownKey, "1");
-
-  try {
-    await togglePushNotifs(true);
-  } catch (error) {
-    console.error("Activation Push depuis le pré-prompt impossible :", error);
-  }
-};
 
 async function uploadToCloudinary(file) {
   if (!file) throw new Error("Fichier manquant");
@@ -1958,88 +1692,6 @@ window.toggleEmailNotifs = async (val) => {
   saveSessionLocally(currentUser);
 };
 
-window.togglePushNotifs = async (enabled) => {
-  const checkbox = document.getElementById("tog-push-notif");
-
-  if (!currentUser) {
-    setPushToggleState(false);
-    return;
-  }
-
-  if (!enabled) {
-    try {
-      await withOneSignal(async (OneSignal) => {
-        if (!OneSignal.Notifications.isPushSupported()) {
-          throw new Error("PUSH_NOT_SUPPORTED");
-        }
-
-        await OneSignal.login(String(currentUser.id));
-        registerOneSignalPushListener();
-
-        if (OneSignal.User?.PushSubscription?.optOut) {
-          await OneSignal.User.PushSubscription.optOut();
-        }
-      });
-
-      const state = await getOneSignalPushState();
-      setLocalPushState(false, state.subscriptionId || null);
-      showToast("Notifications push désactivées");
-    } catch (e) {
-      console.error("Erreur de désactivation Push OneSignal :", e);
-      setPushToggleState(true);
-      showToast("Impossible de désactiver les notifications push.");
-    }
-    return;
-  }
-
-  try {
-    await withOneSignal(async (OneSignal) => {
-      if (!OneSignal.Notifications.isPushSupported()) {
-        throw new Error("PUSH_NOT_SUPPORTED");
-      }
-
-      await OneSignal.login(String(currentUser.id));
-      registerOneSignalPushListener();
-
-      if (OneSignal.Notifications.permission !== "granted") {
-        await OneSignal.Notifications.requestPermission();
-      }
-
-      if (OneSignal.Notifications.permission !== "granted") {
-        throw new Error("PUSH_NOT_GRANTED");
-      }
-
-      if (OneSignal.User?.PushSubscription?.optIn) {
-        await OneSignal.User.PushSubscription.optIn();
-      }
-    });
-
-    const state = await waitForOneSignalSubscription(5000);
-    const optedIn = !!state.optedIn;
-    const subscriptionId = state.subscriptionId || null;
-
-    if (!optedIn || !subscriptionId) {
-      throw new Error("PUSH_NOT_GRANTED");
-    }
-
-    setLocalPushState(true, subscriptionId);
-    showToast("Notifications push activées ✓");
-  } catch (e) {
-    console.error("Erreur Push OneSignal :", e);
-
-    if (checkbox) checkbox.checked = false;
-
-    if (e?.message === "PUSH_NOT_SUPPORTED") {
-      showToast("Ton navigateur ne supporte pas les notifications push.");
-    } else if (e?.message === "PUSH_NOT_GRANTED") {
-      showToast("Notifications non activées. Autorise les notifications pour ce site dans les paramètres du navigateur.");
-    } else if (e?.message === "ONESIGNAL_TIMEOUT") {
-      showToast("Le service de notifications n'est pas disponible pour le moment.");
-    } else {
-      showToast("Erreur lors de la configuration des notifications push.");
-    }
-  }
-};
 
 window.saveEmailSettings = async () => {
   const e = document.getElementById("setting-email").value.trim();
@@ -2507,10 +2159,17 @@ window.getPostHTML = (p, context) => {
     const u = (f.url || "");
     const lowerU = u.toLowerCase();
     const t = (f.type || "").toLowerCase();
+    const pathname = (() => { try { return new URL(u, window.location.href).pathname.toLowerCase(); } catch (_) { return lowerU.split(/[?#]/)[0]; } })();
     const yt = getYouTubeEmbed(u);
-    const isPDF = t === "application/pdf" || lowerU.endsWith(".pdf");
-    const isVideo = !isPDF && (t === "video/mp4" || lowerU.endsWith(".mp4"));
-    const isImg = !isPDF && !isVideo && (t.startsWith("image/") || lowerU.match(/\.(jpeg|jpg|gif|png|webp)$/i) || lowerU.includes("res.cloudinary.com"));
+    const fileName = (f.name || "").toLowerCase();
+    const isPDF = t === "application/pdf" || pathname.endsWith(".pdf") || fileName.endsWith(".pdf");
+    const isVideo = !isPDF && (t.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(pathname) || /\.(mp4|webm|mov|m4v)$/i.test(fileName));
+    const knownNonImage = /\.(pdf|doc|docx|xls|xlsx|xlsm|ppt|pptx|csv|txt|rtf|zip|rar|7z|odt|ods|odp)$/i.test(pathname) ||
+      /\.(pdf|doc|docx|xls|xlsx|xlsm|ppt|pptx|csv|txt|rtf|zip|rar|7z|odt|ods|odp)$/i.test(fileName);
+    const isImageExtension = /\.(jpeg|jpg|gif|png|webp|avif|bmp)$/i.test(pathname) || /\.(jpeg|jpg|gif|png|webp|avif|bmp)$/i.test(fileName);
+    const cloudinaryImagePath = /\/image\/upload\//i.test(pathname);
+    const isImg = !isPDF && !isVideo && !knownNonImage &&
+      (t.startsWith("image/") || isImageExtension || ((!t || t === "application/octet-stream") && cloudinaryImagePath));
     if (yt) youtube = { url: u, embedUrl: yt, name: f.name || "YouTube", type: "video/youtube" };
     else if (isImg) images.push({ ...f, kind: "image", _order: index });
     else if (isVideo) videos.push({ ...f, kind: "video", _order: index });
@@ -3198,6 +2857,7 @@ window.handleCreatePost = async () => {
 
   try {
     await addDoc(collection(db, "posts"), post);
+    trackActivityEvent("post_create");
     
     document.getElementById("post-title").value = ""; 
     document.getElementById("post-desc").value = "";
@@ -3254,6 +2914,7 @@ window.toggleLike = async (postId) => {
     likes = likes.filter(u => u !== currentUser.username); 
   } else {
     likes.push(currentUser.username);
+    trackActivityEvent("like");
   }
   
   await updateDoc(ref, { likes });
@@ -3270,6 +2931,7 @@ window.toggleQuizLike = async (quizId, isAI) => {
     likes = likes.filter(u => u !== currentUser.username); 
   } else {
     likes.push(currentUser.username);
+    trackActivityEvent("like");
   }
   
   await updateDoc(ref, { likes });
@@ -4401,6 +4063,7 @@ RENVOIE UNIQUEMENT LE JSON.`;
     };
 
     const docRef = await addDoc(collection(db, "ai_quizzes"), newQuiz);
+    trackActivityEvent("ai_quiz_generated");
     
     closeModal("m-ia-quiz");
     document.getElementById("quiz-ia-topic").value = "";
@@ -4509,6 +4172,7 @@ window.startQuiz = (alreadyOpen = false) => {
   document.getElementById("btn-next-question").style.display = "block";
   
   renderCurrentQuestion();
+  trackActivityEvent("quiz_start");
 };
 
 window.renderCurrentQuestion = () => {
@@ -4580,6 +4244,7 @@ window.submitQuiz = async () => {
   
   document.getElementById("quiz-result-msg").innerText = `${msg} (répondu en ${timeTaken}s)`;
   openModal('m-quiz-result');
+  trackActivityEvent("quiz_complete");
 
   const colName = window._currentQuizData.isAI ? "ai_quizzes" : "quizzes";
   const currentCount = window._currentQuizData.attemptsCount || 0;
@@ -5250,3 +4915,1089 @@ function esc(s) {
 } 
 
 window.esc = esc;
+
+
+// ============================================================
+// EXERCICES IA — création, réponses, chronomètre et correction
+// Les copies et leur contexte sont stockés localement par compte.
+// ============================================================
+const EXERCISE_PDF_MAX_TOTAL = 24 * 1024 * 1024;
+const EXERCISE_MAX_PDFS = 4;
+const EXERCISE_MAX_PHOTOS = 6;
+const EXERCISE_MAX_DURATION_MINUTES = 240;
+const EXERCISE_LIBRARY_PREFIX = "dnb_reviz_exercises_v1_";
+window._exerciseLikedSources = [];
+window._exerciseSourceFiles = [];
+window._exercisePaperFiles = [];
+window._exercisePaperImages = [];
+window._exercisePhotoSessionCache = new Map();
+window._exerciseActive = null;
+window._exerciseTimerInterval = null;
+window._exercisePdfModulePromise = null;
+window._exerciseOcrModulePromise = null;
+
+function exercisePhotoStorageKey(exerciseId) {
+  return `${String(window.currentUser?.username || "invité")}::${exerciseId}`;
+}
+function openExercisePhotoDB() {
+  return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) return reject(new Error("IndexedDB indisponible."));
+    const request = indexedDB.open("DnBRevizExercisePhotos", 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains("photos")) database.createObjectStore("photos", { keyPath: "key" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Ouverture du stockage photo impossible."));
+  });
+}
+async function saveExercisePaperImages(exerciseId, images) {
+  window._exercisePhotoSessionCache.set(exerciseId, images);
+  const database = await openExercisePhotoDB();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction("photos", "readwrite");
+    transaction.objectStore("photos").put({ key: exercisePhotoStorageKey(exerciseId), images });
+    transaction.oncomplete = () => { database.close(); resolve(); };
+    transaction.onerror = () => { database.close(); reject(transaction.error); };
+  });
+}
+async function loadExercisePaperImages(exerciseId) {
+  if (window._exercisePhotoSessionCache.has(exerciseId)) return window._exercisePhotoSessionCache.get(exerciseId);
+  try {
+    const database = await openExercisePhotoDB();
+    const value = await new Promise((resolve, reject) => {
+      const transaction = database.transaction("photos", "readonly");
+      const request = transaction.objectStore("photos").get(exercisePhotoStorageKey(exerciseId));
+      request.onsuccess = () => resolve(request.result?.images || []);
+      request.onerror = () => reject(request.error);
+    });
+    database.close();
+    window._exercisePhotoSessionCache.set(exerciseId, value);
+    return value;
+  } catch (error) {
+    console.warn("Photos de la copie papier non disponibles :", error);
+    return [];
+  }
+}
+async function deleteExercisePaperImages(exerciseId) {
+  window._exercisePhotoSessionCache.delete(exerciseId);
+  try {
+    const database = await openExercisePhotoDB();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction("photos", "readwrite");
+      transaction.objectStore("photos").delete(exercisePhotoStorageKey(exerciseId));
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  } catch (error) {
+    console.warn("Suppression des photos de copie impossible :", error);
+  }
+}
+
+function exerciseEscape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;', "'": "&#39;"
+  }[ch]));
+}
+function exerciseCurrentUserKey() {
+  return EXERCISE_LIBRARY_PREFIX + String(window.currentUser?.username || "invité").replace(/[^a-zA-Z0-9_.-]/g, "_");
+}
+function exerciseLoadLibrary() {
+  try {
+    const value = JSON.parse(localStorage.getItem(exerciseCurrentUserKey()) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch (error) {
+    console.warn("Bibliothèque d'exercices illisible :", error);
+    return [];
+  }
+}
+function exerciseSaveLibrary() {
+  if (!window._exerciseActive) return;
+  const library = exerciseLoadLibrary();
+  const index = library.findIndex(item => item.id === window._exerciseActive.id);
+  if (index >= 0) library[index] = window._exerciseActive;
+  else library.unshift(window._exerciseActive);
+  const compactLibrary = library.slice(0, 20).map(item => ({
+    ...item,
+    // Binary photo data lives in IndexedDB, not localStorage.
+    paperImages: (item.paperImages || []).map(image => ({ name: image.name || "Copie papier" }))
+  }));
+  try {
+    localStorage.setItem(exerciseCurrentUserKey(), JSON.stringify(compactLibrary));
+    renderSavedExercises();
+  } catch (error) {
+    console.error("Enregistrement local impossible :", error);
+    showToast("Stockage local plein : exporte tes exercices puis supprime les anciens.");
+  }
+}
+function exerciseGetActive() {
+  return window._exerciseActive;
+}
+function exerciseSetPanel(panel) {
+  ["exercise-home-panel", "exercise-setup", "exercise-workspace"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === panel ? "block" : "none";
+  });
+}
+function exerciseShowWorkspace() {
+  exerciseSetPanel("exercise-workspace");
+  const preview = document.getElementById("exercise-preview-state");
+  const active = document.getElementById("exercise-active-state");
+  const self = document.getElementById("exercise-self-assess");
+  const result = document.getElementById("exercise-correction-result");
+  const ex = exerciseGetActive();
+  if (!ex) return;
+  document.getElementById("exercise-work-title").textContent = ex.title || ex.topic;
+  document.getElementById("exercise-active-title").textContent = ex.title || ex.topic;
+  document.getElementById("exercise-work-meta").textContent =
+    `${ex.subject} · ${ex.topic} · ${ex.questions.length} questions · ${ex.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)} points`;
+  document.getElementById("exercise-work-source").textContent =
+    ex.sourceSummary || "Exercice préparé à partir du thème et des consignes que tu as indiqués.";
+  document.getElementById("exercise-preview-questions").innerHTML = ex.questions.map((q, i) => `
+    <article class="exercise-question-card">
+      <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${Number(q.points) || 0} pt${Number(q.points) > 1 ? "s" : ""}</span></div>
+      <p>${exerciseEscape(q.question)}</p>
+    </article>`).join("");
+
+  if (ex.completed && ex.correction) {
+    preview.style.display = "none";
+    active.style.display = "none";
+    self.style.display = "none";
+    result.style.display = "block";
+    renderExerciseCorrection();
+    return;
+  }
+  if (ex.completed) {
+    preview.style.display = "none";
+    active.style.display = "none";
+    self.style.display = "block";
+    result.style.display = "none";
+    document.getElementById("exercise-self-rating").value = String(ex.selfRating || 3);
+    document.getElementById("exercise-self-comment").value = ex.selfComment || "";
+    updateExerciseSelfRating();
+    return;
+  }
+  if (ex.startedAt) {
+    preview.style.display = "none";
+    active.style.display = "block";
+    self.style.display = "none";
+    result.style.display = "none";
+    renderExerciseAnswerFields();
+    startExerciseTimerDisplay();
+  } else {
+    preview.style.display = "block";
+    active.style.display = "none";
+    self.style.display = "none";
+    result.style.display = "none";
+    stopExerciseTimer();
+    document.getElementById("exercise-live-timer").style.display = "none";
+  }
+}
+function renderSavedExercises() {
+  const container = document.getElementById("exercise-saved-list");
+  if (!container) return;
+  const list = exerciseLoadLibrary().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (!list.length) {
+    container.innerHTML = `<div class="empty-text">Aucun exercice créé pour le moment. Clique sur « Créer un exercice avec l'IA » pour commencer.</div>`;
+    return;
+  }
+  container.innerHTML = list.map(item => {
+    const done = !!item.correction;
+    const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString("fr-FR") : "";
+    const note = done ? `<span class="exercise-library-grade">${Number(item.correction.score).toFixed(1).replace(".", ",")}/20</span>` : "";
+    const state = done ? "Corrigé" : item.completed ? "À corriger" : item.startedAt ? "En cours" : "Prêt";
+    return `
+      <article class="exercise-library-card">
+        <button class="exercise-library-open" type="button" onclick="openSavedExercise('${exerciseEscape(item.id)}')">
+          <span class="exercise-library-icon">✍️</span>
+          <span class="exercise-library-copy">
+            <strong>${exerciseEscape(item.topic || item.title || "Exercice")}</strong>
+            <span>${exerciseEscape(item.subject || "Matière")} · ${date} · ${exerciseEscape(state)}</span>
+          </span>
+          ${note}
+        </button>
+        <button class="exercise-library-delete" type="button" title="Supprimer cet exercice" aria-label="Supprimer cet exercice" onclick="deleteSavedExercise('${exerciseEscape(item.id)}')">×</button>
+      </article>`;
+  }).join("");
+}
+window.loadExercisesUI = () => {
+  renderSavedExercises();
+  if (!window._exerciseActive) {
+    exerciseSetPanel("exercise-home-panel");
+  }
+};
+
+function populateExerciseSubjects() {
+  const select = document.getElementById("exercise-subject");
+  if (!select) return;
+  const subjects = [...(window.subjectsMap?.keys?.() || [])].filter(Boolean).sort((a, b) => a.localeCompare(b, "fr"));
+  const previous = select.value;
+  select.innerHTML = `<option value="">Choisir une matière…</option>` +
+    subjects.map(name => `<option value="${exerciseEscape(name)}">${exerciseEscape(name)}</option>`).join("") +
+    `<option value="autre">Autre</option>`;
+  if (previous && [...select.options].some(option => option.value === previous)) select.value = previous;
+};
+window.openExerciseCreator = async () => {
+  stopExerciseTimer();
+  window._exerciseActive = null;
+  populateExerciseSubjects();
+  document.getElementById("exercise-topic").value = "";
+  document.getElementById("exercise-details").value = "";
+  document.getElementById("exercise-count").value = "8";
+  document.getElementById("exercise-subject-custom").value = "";
+  document.getElementById("exercise-subject-custom").style.display = "none";
+  document.getElementById("exercise-subject").value = "";
+  document.getElementById("exercise-timer-enabled").checked = false;
+  document.getElementById("exercise-timer-minutes").value = "60";
+  document.getElementById("exercise-timer-options").style.display = "none";
+  document.querySelector('input[name="exercise-method"][value="digital"]').checked = true;
+  selectExerciseMethod("digital");
+  window._exerciseSourceFiles = [];
+  window._exercisePaperFiles = [];
+  document.getElementById("exercise-pdf-files").value = "";
+  const paperInput = document.getElementById("exercise-paper-photos");
+  if (paperInput) paperInput.value = "";
+  document.getElementById("exercise-pdf-status").textContent = "Aucun PDF sélectionné.";
+  document.getElementById("exercise-generation-status").style.display = "none";
+  document.getElementById("exercise-generate-button").disabled = false;
+  exerciseSetPanel("exercise-setup");
+  await reloadExerciseLikedSources();
+};
+window.closeExerciseSetup = () => {
+  document.getElementById("exercise-generation-status").style.display = "none";
+  document.getElementById("exercise-generate-button").disabled = false;
+  exerciseSetPanel("exercise-home-panel");
+  renderSavedExercises();
+};
+window.toggleExerciseCustomSubject = () => {
+  const isOther = document.getElementById("exercise-subject").value === "autre";
+  document.getElementById("exercise-subject-custom").style.display = isOther ? "block" : "none";
+};
+window.selectExerciseMethod = method => {
+  const paper = method === "paper";
+  document.getElementById("exercise-method-digital-card").classList.toggle("active", !paper);
+  document.getElementById("exercise-method-paper-card").classList.toggle("active", paper);
+  const radio = document.querySelector(`input[name="exercise-method"][value="${paper ? "paper" : "digital"}"]`);
+  if (radio) radio.checked = true;
+};
+window.toggleExerciseTimer = () => {
+  document.getElementById("exercise-timer-options").style.display =
+    document.getElementById("exercise-timer-enabled").checked ? "flex" : "none";
+};
+
+window.reloadExerciseLikedSources = async () => {
+  const container = document.getElementById("exercise-liked-sources");
+  if (!container) return;
+  if (!window.currentUser?.username) {
+    container.innerHTML = `<p class="caption">Connecte-toi pour charger tes ressources aimées.</p>`;
+    return;
+  }
+  container.innerHTML = `<p class="caption">Recherche de tes cours et quiz aimés…</p>`;
+  try {
+    const username = window.currentUser.username;
+    const [postsSnap, quizzesSnap, aiQuizzesSnap] = await Promise.all([
+      getDocs(query(collection(db, "posts"), where("likes", "array-contains", username))),
+      getDocs(query(collection(db, "quizzes"), where("likes", "array-contains", username))),
+      getDocs(query(collection(db, "ai_quizzes"), where("likes", "array-contains", username)))
+    ]);
+    const sources = [];
+    postsSnap.docs.forEach(d => {
+      const data = d.data();
+      sources.push({ id: `post:${d.id}`, refId: d.id, kind: "post", label: "Cours / fiche", title: data.title || "Document aimé",
+        subject: data.matiere || "", description: data.description || "", files: Array.isArray(data.files) ? data.files : [],
+        fileData: data.fileData || data.url || "", fileType: data.fileType || "", fileName: data.fileName || "" });
+    });
+    quizzesSnap.docs.forEach(d => {
+      const data = d.data();
+      sources.push({ id: `quiz:${d.id}`, refId: d.id, kind: "quiz", label: "Quiz aimé", title: data.title || "Quiz",
+        subject: data.matiere || "", description: data.description || "", questions: Array.isArray(data.questions) ? data.questions : [] });
+    });
+    aiQuizzesSnap.docs.forEach(d => {
+      const data = d.data();
+      sources.push({ id: `ai_quiz:${d.id}`, refId: d.id, kind: "ai_quiz", label: "Quiz IA aimé", title: data.title || "Quiz IA",
+        subject: data.matiere || "", description: data.description || "", questions: Array.isArray(data.questions) ? data.questions : [] });
+    });
+    window._exerciseLikedSources = sources.sort((a, b) => a.title.localeCompare(b.title, "fr"));
+    if (!sources.length) {
+      container.innerHTML = `<p class="caption">Aucun cours ni quiz aimé trouvé. Tu peux tout de même joindre tes PDF ci-dessous.</p>`;
+      return;
+    }
+    container.innerHTML = sources.map(source => `
+      <label class="exercise-source-option">
+        <input type="checkbox" value="${exerciseEscape(source.id)}" class="exercise-source-checkbox">
+        <span><strong>${exerciseEscape(source.title)}</strong><small>${exerciseEscape(source.label)}${source.subject ? " · " + exerciseEscape(source.subject) : ""}</small></span>
+      </label>`).join("");
+  } catch (error) {
+    console.error("Chargement des ressources aimées impossible :", error);
+    container.innerHTML = `<p class="caption">Impossible de charger les likes. Tu peux poursuivre en ajoutant directement tes PDF.</p>`;
+  }
+};
+
+window.handleExercisePDFSelect = event => {
+  const files = Array.from(event.target.files || []);
+  const status = document.getElementById("exercise-pdf-status");
+  if (files.length > EXERCISE_MAX_PDFS) {
+    event.target.value = "";
+    window._exerciseSourceFiles = [];
+    status.textContent = `Maximum ${EXERCISE_MAX_PDFS} PDF.`;
+    return showToast(`Maximum ${EXERCISE_MAX_PDFS} PDF autorisés.`);
+  }
+  if (files.some(file => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))) {
+    event.target.value = "";
+    window._exerciseSourceFiles = [];
+    status.textContent = "Seuls les fichiers PDF sont acceptés.";
+    return showToast("Sélectionne uniquement des fichiers PDF.");
+  }
+  const total = files.reduce((sum, file) => sum + file.size, 0);
+  if (total > EXERCISE_PDF_MAX_TOTAL) {
+    event.target.value = "";
+    window._exerciseSourceFiles = [];
+    status.textContent = "Taille totale trop importante.";
+    return showToast("Les PDF ne doivent pas dépasser 24 Mo au total.");
+  }
+  window._exerciseSourceFiles = files;
+  status.textContent = files.length ? files.map(file => `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} Mo)`).join(" · ") : "Aucun PDF sélectionné.";
+};
+
+async function loadExercisePdfJs() {
+  if (!window._exercisePdfModulePromise) {
+    window._exercisePdfModulePromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs")
+      .then(module => {
+        const pdfjs = module.default || module;
+        if (pdfjs.GlobalWorkerOptions) {
+          pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+        }
+        return pdfjs;
+      });
+  }
+  return window._exercisePdfModulePromise;
+}
+async function extractExercisePdfTextFromBytes(bytes, maxPages = 18, maxChars = 18000) {
+  const pdfjs = await loadExercisePdfJs();
+  const loadingTask = pdfjs.getDocument({ data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), disableWorker: true });
+  const pdf = await loadingTask.promise;
+  const pageCount = Math.min(pdf.numPages, maxPages);
+  const parts = [];
+  let totalChars = 0;
+  for (let pageNumber = 1; pageNumber <= pageCount && totalChars < maxChars; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(item => item.str || "").join(" ").replace(/\s+/g, " ").trim();
+    if (pageText) {
+      const chunk = `Page ${pageNumber}: ${pageText}`;
+      parts.push(chunk.slice(0, Math.max(0, maxChars - totalChars)));
+      totalChars += chunk.length;
+    }
+  }
+  // For scanned PDFs without a text layer, OCR a few pages locally in the browser.
+  if (!parts.length && pageCount > 0) {
+    let worker = null;
+    try {
+      worker = await createExerciseOCRWorker();
+      const ocrPages = Math.min(pageCount, 6);
+      for (let pageNumber = 1; pageNumber <= ocrPages && totalChars < maxChars; pageNumber++) {
+        const page = await pdf.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 1.35 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        await page.render({ canvasContext: context, viewport }).promise;
+        const result = await worker.recognize(canvas);
+        const pageText = String(result.data.text || "").replace(/\s+/g, " ").trim();
+        if (pageText) {
+          const chunk = `Page ${pageNumber} (OCR): ${pageText}`;
+          parts.push(chunk.slice(0, Math.max(0, maxChars - totalChars)));
+          totalChars += chunk.length;
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    } catch (error) {
+      console.warn("OCR du PDF scanné impossible :", error);
+    } finally {
+      if (worker) {
+        try { await worker.terminate(); } catch (_) {}
+      }
+    }
+  }
+  const totalPages = pdf.numPages;
+  try { await pdf.destroy(); } catch (_) {}
+  return { text: parts.join("\n"), pagesRead: pageCount, totalPages };
+}
+async function extractExercisePdfFile(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return extractExercisePdfTextFromBytes(bytes);
+}
+async function extractExercisePdfUrl(url) {
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) throw new Error(`Téléchargement PDF impossible (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return extractExercisePdfTextFromBytes(bytes, 12, 10000);
+}
+function collectExerciseSelectedSources() {
+  const selectedIds = new Set([...document.querySelectorAll(".exercise-source-checkbox:checked")].map(el => el.value));
+  return window._exerciseLikedSources.filter(source => selectedIds.has(source.id));
+}
+async function buildExerciseSourceContext() {
+  const chunks = [];
+  const summaries = [];
+  const selectedSources = collectExerciseSelectedSources();
+  let remainingChars = 20000;
+  for (const source of selectedSources) {
+    const head = `[Ressource aimée — ${source.label}] ${source.title}${source.subject ? " · " + source.subject : ""}\n${source.description || ""}`;
+    chunks.push(head);
+    summaries.push(source.title);
+    remainingChars -= head.length;
+    if (source.questions?.length) {
+      const quizText = source.questions.slice(0, 25).map((question, i) =>
+        `${i + 1}. ${question.question || ""}\nRéponses : ${(question.options || []).join(" | ")}\nRéponse attendue : ${question.options?.[question.correctIndex] || question.answer || ""}\nExplication : ${question.justification || question.explanation || ""}`
+      ).join("\n");
+      chunks.push(quizText.slice(0, Math.max(0, remainingChars)));
+      remainingChars -= quizText.length;
+    }
+    const files = source.files?.length ? source.files : (source.fileData ? [{ url: source.fileData, name: source.fileName, type: source.fileType }] : []);
+    for (const file of files) {
+      const url = file.url || "";
+      const isPdf = (file.type || "").toLowerCase() === "application/pdf" || /\.pdf(?:[?#]|$)/i.test(url);
+      if (!url || !isPdf || remainingChars <= 500) continue;
+      try {
+        const extracted = await extractExercisePdfUrl(url);
+        if (extracted.text) {
+          const section = `[PDF lié à « ${source.title} » — ${file.name || "document"}]\n${extracted.text}`;
+          chunks.push(section.slice(0, remainingChars));
+          remainingChars -= Math.min(section.length, remainingChars);
+        }
+      } catch (error) {
+        console.warn("PDF du cours aimé non accessible pour extraction :", error);
+      }
+    }
+  }
+  for (const file of window._exerciseSourceFiles) {
+    if (remainingChars <= 500) break;
+    const extracted = await extractExercisePdfFile(file);
+    if (!extracted.text.trim()) {
+      throw new Error(`Aucun texte lisible dans « ${file.name} ». S'il s'agit d'un scan, ajoute aussi des consignes dans le champ de précisions.`);
+    }
+    const section = `[PDF ajouté — ${file.name}]\n${extracted.text}`;
+    chunks.push(section.slice(0, remainingChars));
+    remainingChars -= Math.min(section.length, remainingChars);
+    summaries.push(file.name);
+  }
+  return {
+    text: chunks.join("\n\n").slice(0, 22000),
+    summary: summaries.length ? `Ressources utilisées : ${summaries.join(", ")}` : "Aucun document aimé ou PDF joint ; génération basée sur le thème et les consignes saisis."
+  };
+}
+async function callExerciseAI(systemPrompt, userPrompt, maxTokens = 6000) {
+  const response = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+      temperature: 0.35,
+      max_tokens: maxTokens,
+      response_format: { type: "json_object" }
+    })
+  });
+  const bodyText = await response.text();
+  if (!response.ok) throw new Error(`Service IA indisponible (${response.status}) : ${bodyText.slice(0, 300)}`);
+  let payload;
+  try { payload = JSON.parse(bodyText); } catch (_) { throw new Error("Réponse du service IA illisible."); }
+  const content = payload.choices?.[0]?.message?.content;
+  if (!content) throw new Error(payload.error?.message || "L'IA n'a pas renvoyé de contenu.");
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("La réponse IA ne contient pas de JSON valide.");
+  return JSON.parse(match[0]);
+}
+
+window.generateAIExercise = async () => {
+  const subjectSelect = document.getElementById("exercise-subject").value;
+  const subject = subjectSelect === "autre" ? document.getElementById("exercise-subject-custom").value.trim() : subjectSelect;
+  const topic = document.getElementById("exercise-topic").value.trim();
+  const details = document.getElementById("exercise-details").value.trim();
+  const count = Math.min(15, Math.max(3, parseInt(document.getElementById("exercise-count").value, 10) || 8));
+  const method = document.querySelector('input[name="exercise-method"]:checked')?.value || "digital";
+  const timerEnabled = document.getElementById("exercise-timer-enabled").checked;
+  const duration = Math.min(EXERCISE_MAX_DURATION_MINUTES, Math.max(1, parseInt(document.getElementById("exercise-timer-minutes").value, 10) || 60));
+  if (!subject || !topic) return showToast("Choisis une matière et indique un chapitre ou un thème.");
+  if (subjectSelect === "autre" && !subject) return showToast("Précise la matière.");
+  const button = document.getElementById("exercise-generate-button");
+  const loading = document.getElementById("exercise-generation-status");
+  button.disabled = true;
+  loading.style.display = "flex";
+  try {
+    const source = await buildExerciseSourceContext();
+    const systemPrompt = `Tu es un professeur spécialisé, exigeant, neutre et pédagogue. Tu crées un vrai sujet d'entraînement scolaire, avec un niveau cohérent et un barème précis.
+Réponds uniquement par un objet JSON valide, sans markdown ni texte autour.
+Le JSON doit respecter ce schéma :
+{
+ "title":"Titre court",
+ "instructions":"Consignes générales",
+ "questions":[
+  {"question":"Énoncé complet","type":"question ouverte|étude de document|calcul|problème","points":2,"expectedAnswer":"Éléments de réponse attendus, pour la correction uniquement","rubric":"Critères précis d'attribution des points"}
+ ]
+}
+Règles impératives :
+- Crée exactement le nombre de questions demandé, sans répétitions et avec une progression cohérente.
+- Le total des points doit être exactement 20 (répartis entre les questions).
+- Chaque énoncé doit être autonome, compréhensible et suffisamment précis.
+- Les questions doivent pouvoir être traitées dans la durée indiquée ; adapte la longueur et la profondeur à cette durée.
+- Utilise réellement les documents de référence fournis. N'invente pas de contenu prétendument extrait des PDF. Si les documents sont insuffisants, complète avec des connaissances disciplinaires exactes en distinguant les éléments.
+- Ne montre jamais les réponses attendues dans l'énoncé des questions.
+- Privilégie les réponses rédigées, raisonnements, analyses ou exercices concrets plutôt que les QCM.
+- Les attentes de correction doivent être explicites, nuancées et attribuer les points partiels lorsque le raisonnement est pertinent.`;
+    const userPrompt = `Prépare un exercice scolaire.
+Matière : ${subject}
+Chapitre / thème : ${topic}
+Nombre de questions : ${count}
+Mode : ${method === "paper" ? "réponse sur feuille papier" : "réponse numérique au clavier"}
+Durée : ${timerEnabled ? duration + " minutes" : "sans chronomètre"}
+Consignes et niveau du contrôle : ${details || "Niveau intermédiaire adapté à la matière."}
+Ressources :
+${source.text || "Aucune ressource jointe."}
+Résumé des ressources : ${source.summary}
+Retourne uniquement le JSON demandé.`;
+    const data = await callExerciseAI(systemPrompt, userPrompt, 6500);
+    if (!Array.isArray(data.questions) || data.questions.length < 3) throw new Error("L'IA n'a pas produit assez de questions.");
+    const questions = data.questions.slice(0, count).map((q, i) => ({
+      question: String(q.question || `Question ${i + 1}`).trim(),
+      type: String(q.type || "Question ouverte"),
+      points: Math.max(0, Number(q.points) || 0),
+      expectedAnswer: String(q.expectedAnswer || ""),
+      rubric: String(q.rubric || "")
+    }));
+    if (questions.some(q => !q.question)) throw new Error("Une question de l'exercice est vide.");
+    const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+    if (totalPoints <= 0) {
+      const equalPoints = Math.round((20 / questions.length) * 10) / 10;
+      questions.forEach(q => q.points = equalPoints);
+      const equalTotal = questions.reduce((sum, q) => sum + q.points, 0);
+      questions[questions.length - 1].points = Math.round((questions[questions.length - 1].points + 20 - equalTotal) * 10) / 10;
+    } else if (Math.abs(totalPoints - 20) > 0.05) {
+      const factor = 20 / totalPoints;
+      questions.forEach(q => q.points = Math.round(q.points * factor * 10) / 10);
+      const correctedTotal = questions.reduce((sum, q) => sum + q.points, 0);
+      questions[questions.length - 1].points = Math.round((questions[questions.length - 1].points + (20 - correctedTotal)) * 10) / 10;
+    }
+    const exercise = {
+      id: (window.crypto?.randomUUID?.() || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+      title: String(data.title || `Exercice — ${topic}`),
+      instructions: String(data.instructions || "Réponds de façon structurée et justifie tes raisonnements."),
+      subject, topic, details, method,
+      timerEnabled, durationMinutes: timerEnabled ? duration : 0,
+      questions, answers: {},
+      sourceContext: source.text || "",
+      sourceSummary: source.summary,
+      createdAt: Date.now(),
+      startedAt: 0,
+      timerExpiresAt: 0,
+      timerExpired: false,
+      completed: false,
+      paperTranscript: "",
+      paperImages: [],
+      selfRating: 3,
+      selfComment: "",
+      correction: null
+    };
+    window._exerciseActive = exercise;
+    exerciseSaveLibrary();
+    exerciseShowWorkspace();
+    showToast("Exercice créé. Tu peux commencer quand tu es prêt.");
+  } catch (error) {
+    console.error("Génération d'exercice impossible :", error);
+    showToast(error.message || "Impossible de générer l'exercice.");
+  } finally {
+    button.disabled = false;
+    loading.style.display = "none";
+  }
+};
+
+window.openSavedExercise = async id => {
+  window._exercisePaperFiles = [];
+  const paperInput = document.getElementById("exercise-paper-photos");
+  if (paperInput) paperInput.value = "";
+  const exercise = exerciseLoadLibrary().find(item => item.id === id);
+  if (!exercise) return showToast("Cet exercice n'est plus disponible sur cet appareil.");
+  if (exercise.method === "paper") {
+    exercise.paperImages = await loadExercisePaperImages(id);
+  }
+  window._exerciseActive = exercise;
+  exerciseShowWorkspace();
+};
+window.deleteSavedExercise = async id => {
+  const exercise = exerciseLoadLibrary().find(item => item.id === id);
+  if (!exercise) return;
+  if (!confirm(`Supprimer l'exercice « ${exercise.topic || exercise.title} » ?`)) return;
+  const updated = exerciseLoadLibrary().filter(item => item.id !== id);
+  localStorage.setItem(exerciseCurrentUserKey(), JSON.stringify(updated));
+  await deleteExercisePaperImages(id);
+  if (window._exerciseActive?.id === id) {
+    window._exerciseActive = null;
+    stopExerciseTimer();
+    exerciseSetPanel("exercise-home-panel");
+  }
+  renderSavedExercises();
+};
+window.leaveExerciseWorkspace = () => {
+  stopExerciseTimer();
+  window._exercisePaperFiles = [];
+  const paperInput = document.getElementById("exercise-paper-photos");
+  if (paperInput) paperInput.value = "";
+  window._exerciseActive = null;
+  exerciseSetPanel("exercise-home-panel");
+  renderSavedExercises();
+};
+
+function renderExerciseAnswerFields() {
+  const ex = exerciseGetActive();
+  if (!ex) return;
+  const digital = document.getElementById("exercise-digital-answers");
+  const paper = document.getElementById("exercise-paper-answers");
+  digital.style.display = ex.method === "digital" ? "flex" : "none";
+  paper.style.display = ex.method === "paper" ? "block" : "none";
+  if (ex.method === "digital") {
+    digital.innerHTML = ex.questions.map((q, i) => `
+      <article class="exercise-question-card exercise-answer-card">
+        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
+        <p>${exerciseEscape(q.question)}</p>
+        <label class="exercise-answer-label" for="exercise-answer-${i}">Ta réponse</label>
+        <textarea id="exercise-answer-${i}" rows="5" placeholder="Rédige ta réponse ici…" oninput="saveExerciseAnswers()">${exerciseEscape(ex.answers?.[i] || "")}</textarea>
+      </article>`).join("");
+  } else {
+    document.getElementById("exercise-paper-question-sheet").innerHTML = ex.questions.map((q, i) => `
+      <article class="exercise-question-card">
+        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
+        <p>${exerciseEscape(q.question)}</p>
+      </article>`).join("");
+    document.getElementById("exercise-paper-transcript").value = ex.paperTranscript || "";
+    document.getElementById("exercise-paper-photo-status").textContent =
+      ex.paperImages?.length ? `${ex.paperImages.length} photo(s) conservée(s) pour l'export.` : "Aucune photo ajoutée.";
+  }
+}
+window.saveExerciseAnswers = () => {
+  const ex = exerciseGetActive();
+  if (!ex || ex.method !== "digital") return;
+  ex.answers = ex.answers || {};
+  ex.questions.forEach((q, i) => {
+    const field = document.getElementById(`exercise-answer-${i}`);
+    if (field) ex.answers[i] = field.value;
+  });
+  exerciseSaveLibrary();
+};
+window.startExerciseAttempt = () => {
+  const ex = exerciseGetActive();
+  if (!ex) return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass && !window._exerciseAudioContext) {
+      window._exerciseAudioContext = new AudioContextClass();
+      window._exerciseAudioContext.resume?.();
+    }
+  } catch (_) {}
+  ex.startedAt = Date.now();
+  if (ex.timerEnabled) ex.timerExpiresAt = Date.now() + ex.durationMinutes * 60 * 1000;
+  exerciseSaveLibrary();
+  document.getElementById("exercise-preview-state").style.display = "none";
+  document.getElementById("exercise-active-state").style.display = "block";
+  renderExerciseAnswerFields();
+  startExerciseTimerDisplay();
+};
+function stopExerciseTimer() {
+  if (window._exerciseTimerInterval) clearInterval(window._exerciseTimerInterval);
+  window._exerciseTimerInterval = null;
+}
+function formatExerciseTime(seconds) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const secs = safe % 60;
+  return hours ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` :
+    `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+function ringExerciseTimer() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = window._exerciseAudioContext || new AudioContextClass();
+    context.resume?.();
+    [0, 0.35, 0.7].forEach(offset => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, context.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + offset + 0.22);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(context.currentTime + offset);
+      oscillator.stop(context.currentTime + offset + 0.24);
+    });
+  } catch (error) {
+    console.warn("Sonnerie non disponible :", error);
+  }
+}
+function startExerciseTimerDisplay() {
+  const ex = exerciseGetActive();
+  const timer = document.getElementById("exercise-live-timer");
+  if (!ex?.timerEnabled || !ex.timerExpiresAt) {
+    timer.style.display = "none";
+    stopExerciseTimer();
+    return;
+  }
+  timer.style.display = "inline-flex";
+  stopExerciseTimer();
+  const tick = () => {
+    const remaining = Math.ceil((ex.timerExpiresAt - Date.now()) / 1000);
+    document.getElementById("exercise-timer-display").textContent = formatExerciseTime(remaining);
+    if (remaining <= 0 && !ex.timerExpired && !ex.completed) {
+      ex.timerExpired = true;
+      timer.classList.add("expired");
+      stopExerciseTimer();
+      exerciseSaveLibrary();
+      ringExerciseTimer();
+      showToast("Temps écoulé ! La copie est clôturée pour la correction.");
+      document.getElementById("exercise-time-notice").textContent = "Le temps imparti est écoulé. Ta copie est enregistrée.";
+      finishExerciseAttempt(true);
+    }
+  };
+  tick();
+  if (!ex.timerExpired && !ex.completed) window._exerciseTimerInterval = setInterval(tick, 1000);
+}
+window.handleExercisePaperPhotos = event => {
+  const files = Array.from(event.target.files || []);
+  if (files.length > EXERCISE_MAX_PHOTOS) {
+    event.target.value = "";
+    window._exercisePaperFiles = [];
+    return showToast(`Maximum ${EXERCISE_MAX_PHOTOS} photos autorisées.`);
+  }
+  if (files.some(file => !file.type.startsWith("image/") || file.size > 12 * 1024 * 1024)) {
+    event.target.value = "";
+    window._exercisePaperFiles = [];
+    return showToast("Choisis des images de moins de 12 Mo chacune.");
+  }
+  window._exercisePaperFiles = files;
+  document.getElementById("exercise-paper-photo-status").textContent =
+    files.length ? `${files.length} photo(s) sélectionnée(s) : ${files.map(file => file.name).join(", ")}` : "Aucune photo ajoutée.";
+};
+async function exerciseImageToJpegDataURL(file) {
+  const original = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Lecture de la photo impossible."));
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Image illisible."));
+    image.src = original;
+  });
+  const scale = Math.min(1, 1500 / Math.max(img.width, img.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.72);
+}
+async function loadExerciseOCR() {
+  if (!window._exerciseOcrModulePromise) {
+    window._exerciseOcrModulePromise = import("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js");
+  }
+  return window._exerciseOcrModulePromise;
+}
+async function createExerciseOCRWorker(logger) {
+  const Tesseract = await loadExerciseOCR();
+  return Tesseract.createWorker("fra", 1, {
+    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5",
+    langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0_best_int/",
+    logger: logger || (() => {})
+  });
+}
+window.recognizeExercisePaper = async () => {
+  const ex = exerciseGetActive();
+  const transcript = document.getElementById("exercise-paper-transcript");
+  const status = document.getElementById("exercise-paper-photo-status");
+  if (!ex || ex.method !== "paper") return;
+  const files = window._exercisePaperFiles || [];
+  if (!files.length && !transcript.value.trim()) {
+    return showToast("Ajoute au moins une photo ou saisis directement la transcription.");
+  }
+  if (!files.length) {
+    ex.paperTranscript = transcript.value.trim();
+    exerciseSaveLibrary();
+    return showToast("Transcription enregistrée.");
+  }
+  status.textContent = "Reconnaissance du texte en cours…";
+  try {
+    const worker = await createExerciseOCRWorker(message => {
+      if (message.status === "recognizing text") status.textContent = `Lecture des photos… ${Math.round((message.progress || 0) * 100)} %`;
+    });
+    const recognized = [];
+    const savedImages = [];
+    for (let i = 0; i < files.length; i++) {
+      status.textContent = `Lecture de la photo ${i + 1}/${files.length}…`;
+      const result = await worker.recognize(files[i]);
+      recognized.push(`--- Photo ${i + 1} ---\n${result.data.text || ""}`);
+      savedImages.push({ name: files[i].name, dataUrl: await exerciseImageToJpegDataURL(files[i]) });
+    }
+    await worker.terminate();
+    const existing = transcript.value.trim();
+    transcript.value = [existing, ...recognized].filter(Boolean).join("\n\n");
+    ex.paperImages = savedImages;
+    ex.paperTranscript = transcript.value.trim();
+    window._exercisePaperImages = savedImages;
+    await saveExercisePaperImages(ex.id, savedImages);
+    exerciseSaveLibrary();
+    status.textContent = `${files.length} photo(s) lue(s). Relis et corrige la transcription avant de terminer.`;
+    showToast("Reconnaissance terminée. Vérifie le texte obtenu.");
+  } catch (error) {
+    console.error("OCR des photos impossible :", error);
+    status.textContent = "Reconnaissance automatique indisponible. Tu peux saisir la transcription manuellement.";
+    showToast("La lecture automatique a échoué. Saisis ou colle tes réponses dans la zone de texte.");
+  }
+};
+window.finishExerciseAttempt = async (forcedByTimer = false) => {
+  const ex = exerciseGetActive();
+  if (!ex || ex.completed) return;
+  if (ex.method === "digital") {
+    saveExerciseAnswers();
+    const hasAnswer = Object.values(ex.answers || {}).some(value => String(value).trim());
+    if (!hasAnswer && !forcedByTimer) return showToast("Rédige au moins une réponse avant de terminer.");
+  } else {
+    const transcript = document.getElementById("exercise-paper-transcript").value.trim();
+    ex.paperTranscript = transcript;
+    if (!transcript && !forcedByTimer) return showToast("Ajoute les photos ou la transcription de ta copie avant de terminer.");
+    ex.paperImages = ex.paperImages || [];
+    if (window._exercisePaperFiles?.length && !ex.paperImages.length) {
+      try {
+        const savedImages = [];
+        for (const file of window._exercisePaperFiles) {
+          savedImages.push({ name: file.name, dataUrl: await exerciseImageToJpegDataURL(file) });
+        }
+        ex.paperImages = savedImages;
+        await saveExercisePaperImages(ex.id, savedImages);
+      } catch (error) {
+        console.warn("Conservation des photos de copie impossible :", error);
+      }
+    }
+  }
+  stopExerciseTimer();
+  ex.completed = true;
+  ex.submittedAt = Date.now();
+  ex.timerExpired = ex.timerExpired || !!forcedByTimer;
+  ex.selfRating = 3;
+  ex.selfComment = "";
+  exerciseSaveLibrary();
+  document.getElementById("exercise-active-state").style.display = "none";
+  document.getElementById("exercise-self-assess").style.display = "block";
+  document.getElementById("exercise-correction-result").style.display = "none";
+  document.getElementById("exercise-self-rating").value = "3";
+  document.getElementById("exercise-self-comment").value = "";
+  updateExerciseSelfRating();
+};
+window.updateExerciseSelfRating = () => {
+  const value = document.getElementById("exercise-self-rating").value;
+  document.getElementById("exercise-self-rating-value").textContent = `${value} / 5`;
+  const ex = exerciseGetActive();
+  if (ex) ex.selfRating = Number(value);
+};
+window.correctAIExercise = async () => {
+  const ex = exerciseGetActive();
+  if (!ex || !ex.completed) return;
+  const answers = ex.method === "digital" ? (ex.answers || {}) : { copie: ex.paperTranscript || "" };
+  const selfRating = Number(document.getElementById("exercise-self-rating").value || 3);
+  const selfComment = document.getElementById("exercise-self-comment").value.trim();
+  ex.selfRating = selfRating;
+  ex.selfComment = selfComment;
+  exerciseSaveLibrary();
+  const button = document.getElementById("exercise-correct-button");
+  const loading = document.getElementById("exercise-correction-loading");
+  button.disabled = true;
+  loading.style.display = "flex";
+  try {
+    const systemPrompt = `Tu es un professeur correcteur spécialisé dans la matière de l'exercice. Tu corriges avec neutralité, précision et une exigence soutenue, sans être injuste.
+Tu dois t'appuyer en priorité sur le contexte original fourni lors de la création, les attentes de réponse et le barème de chaque question.
+La note finale doit être sur 20 et refléter strictement la qualité réelle des réponses. N'accorde pas des points pour une notion simplement citée sans explication quand le raisonnement est demandé. Accorde les points partiels aux démarches pertinentes, même si le résultat final est faux. Ne retire pas deux fois les points pour la même erreur.
+En cas de transcription OCR incertaine, signale cette incertitude et ne sanctionne pas un passage illisible sans le préciser.
+L'auto-évaluation de l'élève est informative seulement et ne doit jamais augmenter ou diminuer la note.
+Retourne uniquement un JSON valide selon ce schéma :
+{
+ "score": 0,
+ "generalFeedback": "Appréciation détaillée et honnête",
+ "strengths": ["Point réussi"],
+ "improvements": ["Point à retravailler"],
+ "questions": [
+  {"index":1,"pointsAwarded":0,"maxPoints":2,"comment":"Correction détaillée, erreurs et raisonnement attendu","expectedAnswer":"Réponse attendue concise"}
+ ]
+}
+Vérifie que la somme des points attribués est cohérente avec la note finale sur 20.`;
+    const questionPayload = ex.questions.map((q, i) => ({
+      index: i + 1, question: q.question, maxPoints: q.points,
+      rubric: q.rubric, expectedAnswer: q.expectedAnswer,
+      studentAnswer: ex.method === "digital" ? (answers[i] || "") : (ex.paperTranscript || "")
+    }));
+    const userPrompt = `CORRECTION D'UNE COPIE
+Matière : ${ex.subject}
+Chapitre : ${ex.topic}
+Consignes initiales : ${ex.details || "Aucune précision supplémentaire."}
+Sujet et barème d'origine : ${JSON.stringify(ex.questions)}
+Contexte original fourni à la génération :
+${(ex.sourceContext || "Aucun document de référence joint.").slice(0, 20000)}
+Mode de réponse : ${ex.method === "paper" ? "copie papier transcrite par reconnaissance de texte" : "réponses saisies au clavier"}
+Copie de l'élève :
+${JSON.stringify(questionPayload)}
+Auto-évaluation de l'élève : ${selfRating}/5. Commentaire : ${selfComment || "Aucun"}.
+Temps écoulé : ${ex.timerExpired ? "Oui, le chronomètre est arrivé à zéro." : "Non / non chronométré."}
+Attribue une correction détaillée à chaque question, puis une note réelle sur 20. Ne te montre ni complaisant ni punitif.`;
+    const correction = await callExerciseAI(systemPrompt, userPrompt, 6500);
+    const score = Math.max(0, Math.min(20, Number(correction.score) || 0));
+    ex.correction = {
+      score: Math.round(score * 10) / 10,
+      generalFeedback: String(correction.generalFeedback || "Correction terminée."),
+      strengths: Array.isArray(correction.strengths) ? correction.strengths.map(String) : [],
+      improvements: Array.isArray(correction.improvements) ? correction.improvements.map(String) : [],
+      questions: Array.isArray(correction.questions) ? correction.questions : [],
+      correctedAt: Date.now()
+    };
+    exerciseSaveLibrary();
+    document.getElementById("exercise-self-assess").style.display = "none";
+    document.getElementById("exercise-correction-result").style.display = "block";
+    renderExerciseCorrection();
+    showToast("Correction terminée.");
+  } catch (error) {
+    console.error("Correction IA impossible :", error);
+    showToast(error.message || "La correction n'a pas pu aboutir. Tu peux réessayer.");
+  } finally {
+    button.disabled = false;
+    loading.style.display = "none";
+  }
+};
+function renderExerciseCorrection() {
+  const ex = exerciseGetActive();
+  if (!ex?.correction) return;
+  const correction = ex.correction;
+  document.getElementById("exercise-result-score-value").textContent =
+    `${Number(correction.score).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} / 20`;
+  document.getElementById("exercise-result-score-label").textContent =
+    correction.score >= 16 ? "Très bonne maîtrise" : correction.score >= 12 ? "Ensemble satisfaisant" : correction.score >= 10 ? "En cours d'acquisition" : "Des notions sont à retravailler";
+  document.getElementById("exercise-result-general").textContent = correction.generalFeedback;
+  const lists = `
+    <div><h3>Points réussis</h3><ul>${(correction.strengths || []).map(item => `<li>${exerciseEscape(item)}</li>`).join("") || "<li>Aucun point renseigné.</li>"}</ul></div>
+    <div><h3>À améliorer</h3><ul>${(correction.improvements || []).map(item => `<li>${exerciseEscape(item)}</li>`).join("") || "<li>Aucun point renseigné.</li>"}</ul></div>`;
+  document.getElementById("exercise-result-strengths").innerHTML = lists;
+  document.getElementById("exercise-result-questions").innerHTML = ex.questions.map((q, i) => {
+    const result = correction.questions?.find(item => Number(item.index) === i + 1) || correction.questions?.[i] || {};
+    const answer = ex.method === "digital" ? (ex.answers?.[i] || "") : (i === 0 ? (ex.paperTranscript || "") : "Transcription complète présentée sous la première question.");
+    return `
+      <article class="exercise-correction-card">
+        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${Number(result.pointsAwarded) || 0} / ${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
+        <p class="exercise-correction-question">${exerciseEscape(q.question)}</p>
+        <div class="exercise-answer-review"><strong>Ta réponse</strong><p>${exerciseEscape(answer || "Aucune réponse fournie.")}</p></div>
+        <div class="exercise-teacher-feedback"><strong>Appréciation du professeur</strong><p>${exerciseEscape(result.comment || "Aucune remarque détaillée fournie.")}</p></div>
+        ${result.expectedAnswer ? `<div class="exercise-expected-answer"><strong>Réponse / raisonnement attendu</strong><p>${exerciseEscape(result.expectedAnswer)}</p></div>` : ""}
+      </article>`;
+  }).join("");
+}
+
+window.exportExercisePDF = withCorrection => {
+  const ex = exerciseGetActive();
+  if (!ex) return showToast("Aucun exercice à exporter.");
+  if (!window.jspdf?.jsPDF) return showToast("Le module d'export PDF n'est pas disponible.");
+  if (withCorrection && !ex.correction) return showToast("La correction IA n'est pas encore disponible.");
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  let y = 18;
+  const pageHeight = 282;
+  const margin = 14;
+  const write = (text, color = [30, 30, 35], size = 10, bold = false) => {
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    pdf.setFontSize(size);
+    pdf.setTextColor(...color);
+    const lines = pdf.splitTextToSize(String(text ?? ""), 180);
+    const lineHeight = size * 0.48;
+    if (y + lines.length * lineHeight > pageHeight) { pdf.addPage(); y = 18; }
+    pdf.text(lines, margin, y);
+    y += lines.length * lineHeight + 3;
+  };
+  const blue = [40, 85, 170];
+  const purple = [125, 65, 165];
+  const green = [35, 125, 75];
+  const red = [175, 55, 55];
+  write(ex.title || `Exercice — ${ex.topic}`, [25, 25, 35], 18, true);
+  write(`${ex.subject} · ${ex.topic}`, [95, 95, 105], 10);
+  write(`Créé le ${new Date(ex.createdAt).toLocaleDateString("fr-FR")} · Barème total : 20 points${ex.durationMinutes ? ` · Durée : ${ex.durationMinutes} min` : ""}`, [95, 95, 105], 9);
+  if (ex.instructions) write(ex.instructions, [50, 50, 60], 10);
+  if (ex.method === "paper" && ex.paperTranscript) {
+    write("TRANSCRIPTION DE LA COPIE PAPIER", purple, 10, true);
+    write(ex.paperTranscript, purple, 10);
+  }
+  ex.questions.forEach((q, i) => {
+    write(`QUESTION ${i + 1} · ${q.points} point${q.points > 1 ? "s" : ""}`, blue, 11, true);
+    write(q.question, blue, 10, false);
+    const answer = ex.method === "digital" ? (ex.answers?.[i] || "") : (ex.paperTranscript || "Voir la copie papier originale jointe en fin de sujet.");
+    write("RÉPONSE DE L'ÉLÈVE", purple, 9, true);
+    write(answer || "[Non renseignée]", purple, 10);
+    if (withCorrection && ex.correction && ex.method === "digital") {
+      const result = ex.correction.questions?.find(item => Number(item.index) === i + 1) || ex.correction.questions?.[i] || {};
+      write(`NOTE : ${Number(result.pointsAwarded) || 0} / ${q.points}`, green, 10, true);
+      write(result.comment || "Aucune remarque détaillée.", green, 10);
+      if (result.expectedAnswer) {
+        write("RÉPONSE ATTENDUE", red, 9, true);
+        write(result.expectedAnswer, red, 10);
+      }
+    }
+    y += 2;
+  });
+  if (withCorrection && ex.correction && ex.method === "digital") {
+    if (y > 245) { pdf.addPage(); y = 18; }
+    write(`NOTE FINALE : ${Number(ex.correction.score).toLocaleString("fr-FR")} / 20`, green, 15, true);
+    write(ex.correction.generalFeedback, [45, 45, 50], 10);
+    if (ex.correction.strengths?.length) write(`Points réussis : ${ex.correction.strengths.join(" ; ")}`, green, 9);
+    if (ex.correction.improvements?.length) write(`À retravailler : ${ex.correction.improvements.join(" ; ")}`, red, 9);
+  }
+  if (ex.method === "paper" && ex.paperImages?.length) {
+    pdf.addPage();
+    y = 18;
+    write("PHOTOGRAPHIES DE LA COPIE ORIGINALE", [35, 35, 45], 14, true);
+    ex.paperImages.forEach(image => {
+      try {
+        const props = pdf.getImageProperties(image.dataUrl);
+        const maxW = 180;
+        const maxH = 245;
+        const scale = Math.min(maxW / props.width, maxH / props.height);
+        const w = props.width * scale;
+        const h = props.height * scale;
+        if (y + h > pageHeight) { pdf.addPage(); y = 18; }
+        pdf.addImage(image.dataUrl, "JPEG", margin, y, w, h);
+        y += h + 8;
+      } catch (error) { console.warn("Photo ignorée lors de l'export :", error); }
+    });
+  }
+  if (withCorrection && ex.correction && ex.method === "paper") {
+    pdf.addPage();
+    y = 18;
+    write("CORRECTION DÉTAILLÉE DU PROFESSEUR", green, 14, true);
+    write("La copie originale est jointe dans les pages précédentes. Les annotations ci-dessous se rapportent aux questions correspondantes.", [75, 75, 85], 9);
+    ex.questions.forEach((q, i) => {
+      const result = ex.correction.questions?.find(item => Number(item.index) === i + 1) || ex.correction.questions?.[i] || {};
+      write(`QUESTION ${i + 1} · NOTE : ${Number(result.pointsAwarded) || 0} / ${q.points}`, green, 11, true);
+      write(result.comment || "Aucune remarque détaillée.", [45, 45, 50], 10);
+      if (result.expectedAnswer) {
+        write("RÉPONSE ATTENDUE", red, 9, true);
+        write(result.expectedAnswer, red, 10);
+      }
+    });
+    if (y > 245) { pdf.addPage(); y = 18; }
+    write(`NOTE FINALE : ${Number(ex.correction.score).toLocaleString("fr-FR")} / 20`, green, 15, true);
+    write(ex.correction.generalFeedback, [45, 45, 50], 10);
+    if (ex.correction.strengths?.length) write(`Points réussis : ${ex.correction.strengths.join(" ; ")}`, green, 9);
+    if (ex.correction.improvements?.length) write(`À retravailler : ${ex.correction.improvements.join(" ; ")}`, red, 9);
+  }
+  const suffix = withCorrection ? "corrige" : "non-corrige";
+  pdf.save(`dnb-exercice-${String(ex.topic || "sujet").toLowerCase().replace(/[^a-z0-9]+/gi, "-")}-${suffix}.pdf`);
+};
