@@ -11,12 +11,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://www.gstatic.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data: https:; connect-src 'self' https:; worker-src 'self' blob: https://cdn.jsdelivr.net; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://*.firebaseapp.com; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; base-uri 'self'; object-src 'none';">
 <title>DnB Reviz</title>
+<meta name="description" content="Plateforme d'apprentissage et de révisions scolaires avec générateur d'exercices IA, fiches, quiz, correction personnalisée et chronomètre.">
 <meta property="og:title" content="DnB Reviz" />
+<meta property="og:description" content="Plateforme d'apprentissage et de révisions scolaires avec générateur d'exercices IA, fiches, quiz, correction personnalisée et chronomètre.">
 <meta property="og:image" content="https://iili.io/CR2iW9n.png" />
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="DnB Reviz — Plateforme de révision créer entièrement par Bouillet Dan et Hounnouvi Jayden">
+<meta name="twitter:title" content="DnB Reviz — Plateforme de révision créée entièrement par Bouillet Dan et Hounnouvi Jayden">
 <meta name="twitter:description" content="Partage tes fiches, teste tes connaissances avec l'IA et réussis tes examens avec la communauté DnB Reviz !">
 <meta name="twitter:image" content="https://iili.io/CR2iW9n.png">
 <meta property="og:type" content="website" />
@@ -30,11 +32,6 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script>
-  try {
-    if (window.top !== window.self) window.top.location = window.self.location.href;
-  } catch (_) {}
-</script>
 <link rel="stylesheet" href="styles.css">
 
 <div id="cookie-banner" class="cookie-banner" style="display: none;">
@@ -114,6 +111,7 @@
         <button onclick="switchTab('profil');closeDropdown()">👤 Mon profil</button>
         <button onclick="goToMyLikes();closeDropdown()">❤️ Mes likes</button>
         <button onclick="switchTab('setting');closeDropdown()">⚙️ Paramètres</button>
+        <a href="/download/zip" download="dnb-reviz-complet.zip" style="text-decoration:none; display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; color:var(--ink); border-radius:8px; background:var(--file-bg); margin:4px 0;" onclick="closeDropdown()">📦 Télécharger le projet (ZIP)</a>
         <hr>
         <button class="red" onclick="handleLogout()">Se déconnecter</button>
       </div>
@@ -237,7 +235,7 @@
         </div>
         <div class="quick-nav-card" onclick="switchTab('exercices')">
           <span class="quick-nav-icon">✍️</span>
-          <span>Exercices</span>
+          <span>Exercices IA</span>
         </div>
       </div>
       
@@ -311,221 +309,6 @@
       <div class="feed-wrap" id="quiz-feed"></div>
     </section>
 
-    <section id="page-exercices" class="page-view">
-      <div class="ph-row">
-        <div>
-          <h1>Exercices</h1>
-          <p class="tagline">Entraîne-toi sur tes cours avec des exercices personnalisés et une correction détaillée.</p>
-        </div>
-        <button class="btn-pill" type="button" onclick="openExerciseCreator()">✨ Créer un exercice avec l'IA</button>
-      </div>
-
-      <div id="exercise-home-panel" class="exercise-home-panel">
-        <div class="exercise-intro-card">
-          <div class="exercise-intro-icon">✍️</div>
-          <div>
-            <h2>Un entraînement adapté à tes cours</h2>
-            <p class="caption">Choisis une matière, un chapitre, tes ressources et ton mode de réponse. L'IA prépare ensuite un sujet et peut le corriger avec un barème exigeant.</p>
-          </div>
-        </div>
-        <div class="exercise-list-heading">
-          <div>
-            <h2>Mes exercices</h2>
-            <p class="caption">Les exercices sont enregistrés sur cet appareil et ce navigateur.</p>
-          </div>
-        </div>
-        <div id="exercise-saved-list" class="exercise-saved-list">
-          <div class="empty-text">Aucun exercice créé pour le moment.</div>
-        </div>
-      </div>
-
-      <div id="exercise-setup" class="exercise-panel" style="display:none">
-        <div class="exercise-panel-heading">
-          <div>
-            <span class="exercise-step">ÉTAPE 1 · PRÉPARATION</span>
-            <h2>Créer ton exercice</h2>
-            <p class="caption">Les documents fournis servent de contexte à la génération et à la correction.</p>
-          </div>
-          <button class="btn-ghost" type="button" onclick="closeExerciseSetup()">← Retour</button>
-        </div>
-
-        <div class="exercise-form-grid">
-          <div class="input-group">
-            <label for="exercise-subject">Matière *</label>
-            <select id="exercise-subject" onchange="toggleExerciseCustomSubject()"></select>
-            <input type="text" id="exercise-subject-custom" placeholder="Précise la matière…" style="display:none;margin-top:8px">
-          </div>
-          <div class="input-group">
-            <label for="exercise-topic">Chapitre / thème *</label>
-            <input type="text" id="exercise-topic" maxlength="150" placeholder="Ex. : La responsabilité civile, les fonctions…">
-          </div>
-          <div class="input-group">
-            <label for="exercise-count">Nombre de questions</label>
-            <input type="number" id="exercise-count" value="8" min="3" max="15">
-          </div>
-          <div class="input-group">
-            <label for="exercise-details">Consignes supplémentaires à l'IA</label>
-            <textarea id="exercise-details" rows="3" placeholder="Niveau du contrôle, notions à privilégier, type de calculs, consignes du professeur…"></textarea>
-          </div>
-        </div>
-
-        <div class="exercise-subsection">
-          <div class="exercise-subsection-title">
-            <div>
-              <h3>Ressources de référence</h3>
-              <p class="caption">Sélectionne des cours ou quiz que tu as aimés pour les utiliser comme contexte.</p>
-            </div>
-            <button type="button" class="btn-ghost btn-sm" onclick="reloadExerciseLikedSources()">Actualiser</button>
-          </div>
-          <div id="exercise-liked-sources" class="exercise-source-list">
-            <p class="caption">Chargement des ressources aimées…</p>
-          </div>
-        </div>
-
-        <div class="exercise-subsection">
-          <div class="input-group">
-            <label for="exercise-pdf-files">Ajouter des PDF du cours (facultatif)</label>
-            <input type="file" id="exercise-pdf-files" accept=".pdf,application/pdf" multiple onchange="handleExercisePDFSelect(event)">
-            <p class="caption">Le texte des PDF est extrait dans ton navigateur puis transmis au service IA comme contexte. Les fichiers originaux ne sont pas téléversés par cette fonction.</p>
-            <div id="exercise-pdf-status" class="exercise-file-status">Aucun PDF sélectionné.</div>
-          </div>
-        </div>
-
-        <div class="exercise-subsection">
-          <h3>Mode de réponse</h3>
-          <div class="exercise-method-grid">
-            <label class="exercise-method-card active" id="exercise-method-digital-card">
-              <input type="radio" name="exercise-method" value="digital" checked onchange="selectExerciseMethod('digital')">
-              <span class="exercise-method-icon">⌨️</span>
-              <strong>Sur ordinateur ou téléphone</strong>
-              <span class="caption">Réponds directement sous chaque question dans un champ de texte.</span>
-            </label>
-            <label class="exercise-method-card" id="exercise-method-paper-card">
-              <input type="radio" name="exercise-method" value="paper" onchange="selectExerciseMethod('paper')">
-              <span class="exercise-method-icon">📝</span>
-              <strong>Sur feuille papier</strong>
-              <span class="caption">Télécharge le sujet, écris tes réponses puis envoie une ou plusieurs photos de ta copie.</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="exercise-subsection">
-          <label class="exercise-timer-toggle">
-            <input type="checkbox" id="exercise-timer-enabled" onchange="toggleExerciseTimer()">
-            <span>
-              <strong>⏱️ Ajouter un chronomètre</strong>
-              <span class="caption">La durée démarre lorsque tu commences l'exercice. Une sonnerie signale la fin du temps.</span>
-            </span>
-          </label>
-          <div id="exercise-timer-options" class="exercise-timer-options" style="display:none">
-            <label for="exercise-timer-minutes">Durée autorisée (minutes)</label>
-            <input type="number" id="exercise-timer-minutes" min="1" max="240" value="60">
-            <span class="caption">De 1 minute à 4 heures maximum.</span>
-          </div>
-        </div>
-
-        <div class="exercise-create-actions">
-          <button class="btn-ghost" type="button" onclick="closeExerciseSetup()">Annuler</button>
-          <button class="btn-pill" type="button" id="exercise-generate-button" onclick="generateAIExercise()">✨ Générer l'exercice</button>
-        </div>
-        <div id="exercise-generation-status" class="exercise-generation-status" style="display:none" aria-live="polite">
-          <div class="spinner"></div>
-          <strong>Préparation de ton exercice…</strong>
-          <span class="caption">L'IA analyse les consignes et les ressources sélectionnées. Cette étape peut prendre un moment.</span>
-        </div>
-      </div>
-
-      <div id="exercise-workspace" class="exercise-panel" style="display:none">
-        <div class="exercise-workspace-top">
-          <button class="btn-ghost btn-sm" type="button" onclick="leaveExerciseWorkspace()">← Mes exercices</button>
-          <div id="exercise-live-timer" class="exercise-live-timer" style="display:none">⏱️ <span id="exercise-timer-display">00:00</span></div>
-        </div>
-        <div id="exercise-preview-state">
-          <span class="exercise-step">ÉTAPE 2 · SUJET</span>
-          <h2 id="exercise-work-title"></h2>
-          <p id="exercise-work-meta" class="caption"></p>
-          <div id="exercise-work-source" class="exercise-context-note"></div>
-          <div id="exercise-preview-questions" class="exercise-question-list"></div>
-          <div class="exercise-create-actions">
-            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">📄 Télécharger le sujet vierge</button>
-            <button class="btn-pill" type="button" onclick="startExerciseAttempt()">Commencer l'exercice →</button>
-          </div>
-        </div>
-
-        <div id="exercise-active-state" style="display:none">
-          <div class="exercise-step">ÉTAPE 3 · RÉPONSES</div>
-          <h2 id="exercise-active-title"></h2>
-          <div id="exercise-digital-answers" class="exercise-question-list" style="display:none"></div>
-          <div id="exercise-paper-answers" class="exercise-paper-area" style="display:none">
-            <div class="exercise-context-note">Télécharge le sujet, réponds sur ta feuille puis photographie toutes les pages de ta copie. Vérifie que les photos sont nettes et lisibles.</div>
-            <div id="exercise-paper-question-sheet" class="exercise-question-list"></div>
-            <div class="exercise-subsection">
-              <button class="btn-utility" type="button" onclick="exportExercisePDF(false)">📄 Télécharger le sujet vierge</button>
-              <div class="input-group mt-2">
-                <label for="exercise-paper-photos">Photos de ta copie</label>
-                <input type="file" id="exercise-paper-photos" accept="image/*" capture="environment" multiple onchange="handleExercisePaperPhotos(event)">
-                <p class="caption">Jusqu'à 6 images. L'IA utilise une reconnaissance de texte pour lire l'écriture ; tu pourras relire et modifier la transcription avant la correction.</p>
-                <div id="exercise-paper-photo-status" class="exercise-file-status">Aucune photo ajoutée.</div>
-                <button class="btn-ghost btn-sm mt-1" type="button" onclick="recognizeExercisePaper()">Lire les photos et préparer la transcription</button>
-              </div>
-              <div class="input-group">
-                <label for="exercise-paper-transcript">Transcription des réponses (modifiable)</label>
-                <textarea id="exercise-paper-transcript" rows="8" placeholder="La transcription des photos apparaîtra ici. Tu peux aussi saisir tes réponses manuellement."></textarea>
-              </div>
-            </div>
-          </div>
-          <div class="exercise-create-actions">
-            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">Exporter la copie non corrigée</button>
-            <button class="btn-pill" type="button" onclick="finishExerciseAttempt()">Terminer et m'auto-évaluer →</button>
-          </div>
-          <p class="caption" id="exercise-time-notice"></p>
-        </div>
-
-        <div id="exercise-self-assess" class="exercise-self-assess" style="display:none">
-          <span class="exercise-step">ÉTAPE 4 · AUTO-ÉVALUATION</span>
-          <h2>Comment estimes-tu ton travail ?</h2>
-          <p class="caption">Cette estimation ne modifie pas la note attribuée par la correction IA.</p>
-          <div class="exercise-self-rating-wrap">
-            <label for="exercise-self-rating">Mon ressenti</label>
-            <div class="exercise-rating-line">
-              <input type="range" id="exercise-self-rating" min="1" max="5" value="3" oninput="updateExerciseSelfRating()">
-              <strong id="exercise-self-rating-value">3 / 5</strong>
-            </div>
-            <div class="caption">1 = très difficile · 5 = très à l'aise</div>
-          </div>
-          <div class="input-group">
-            <label for="exercise-self-comment">Ce que tu as trouvé facile ou difficile (facultatif)</label>
-            <textarea id="exercise-self-comment" rows="3" placeholder="Explique brièvement ton ressenti…"></textarea>
-          </div>
-          <div class="exercise-create-actions">
-            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">Exporter la copie non corrigée</button>
-            <button class="btn-pill" id="exercise-correct-button" type="button" onclick="correctAIExercise()">Corriger avec l'IA</button>
-          </div>
-          <div id="exercise-correction-loading" class="exercise-generation-status" style="display:none" aria-live="polite">
-            <div class="spinner"></div>
-            <strong>Correction en cours…</strong>
-            <span class="caption">La copie est évaluée question par question avec un barème strict et neutre. La correction peut prendre du temps.</span>
-          </div>
-        </div>
-
-        <div id="exercise-correction-result" class="exercise-correction-result" style="display:none">
-          <div class="exercise-result-score">
-            <span class="caption">NOTE ATTRIBUÉE</span>
-            <strong id="exercise-result-score-value">— / 20</strong>
-            <span id="exercise-result-score-label"></span>
-          </div>
-          <h2>Correction détaillée</h2>
-          <div id="exercise-result-general" class="exercise-context-note"></div>
-          <div id="exercise-result-strengths" class="exercise-result-columns"></div>
-          <div id="exercise-result-questions" class="exercise-question-list"></div>
-          <div class="exercise-create-actions">
-            <button class="btn-ghost" type="button" onclick="exportExercisePDF(false)">📄 Exporter sans correction</button>
-            <button class="btn-pill" type="button" onclick="exportExercisePDF(true)">📄 Exporter avec la correction</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section id="page-creerquiz" class="page-view">
       <h1>Créer un Quiz</h1>
       <p class="tagline">Prépare un test pour toute la classe (max 50 questions)</p>
@@ -561,6 +344,43 @@
           Publier le Quiz
         </button>
       </div>
+    </section>
+
+    <section id="page-exercices" class="page-view">
+      <div class="ph-row">
+        <div>
+          <h1>Exercices</h1>
+          <p class="tagline">Entraîne-toi sur des sujets complets générés par l'IA d'après tes cours et corrigés avec rigueur.</p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button class="btn-pill" onclick="openCreateExerciceModal()">✨ Créer un exercice avec l'IA</button>
+          <button class="btn-pill-van" onclick="openExerciceFilterModal()">⚙️ Filtres</button>
+        </div>
+      </div>
+
+      <div class="ex-banner-card mt-3">
+        <div class="ex-banner-left">
+          <div class="ex-banner-badge">Professeur IA Spécialisé &amp; Rigoureux</div>
+          <h3 style="margin: 6px 0 4px 0; font-size:18px;">Prépare tes contrôles et examens en conditions réelles</h3>
+          <p class="caption" style="margin:0; line-height:1.5;">Génère des sujets sur-mesure d'après tes vrais PDF de cours, active un chronomètre personnalisable (jusqu'à 4h), choisis de répondre au clavier ou sur feuille papier, auto-évalue-toi, puis reçois une correction neutre et exigeante notée sur 20 avec export PDF.</p>
+        </div>
+        <div class="ex-banner-right">
+          <button class="btn-pill" style="padding:10px 18px; font-size:14px; white-space:nowrap;" onclick="openCreateExerciceModal()">Nouveau sujet 🚀</button>
+        </div>
+      </div>
+
+      <div class="ex-filter-bar mt-3">
+        <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">
+          <button class="btn-ghost btn-sm ex-tab-filter active" id="filter-ex-all" onclick="setExercicesFilter('all')">Tous les sujets</button>
+          <button class="btn-ghost btn-sm ex-tab-filter" id="filter-ex-mine" onclick="setExercicesFilter('mine')">Mes sessions en cours</button>
+          <button class="btn-ghost btn-sm ex-tab-filter" id="filter-ex-graded" onclick="setExercicesFilter('graded')">Mes copies corrigées</button>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="ex-search-input" placeholder="Rechercher par matière, thème..." style="padding:7px 12px; font-size:13px; border-radius:18px; border:1px solid var(--hl); background:var(--card-bg); color:var(--ink);" oninput="handleExerciceSearch(event)">
+        </div>
+      </div>
+
+      <div class="feed-wrap mt-3" id="exercices-feed"></div>
     </section>
 
     <section id="page-messages" class="page-view">
@@ -931,6 +751,19 @@
             <input type="password" id="setting-pwd" placeholder="Nouveau mot de passe">
           </div>
           <button class="btn-pill" onclick="changePassword()">Mettre à jour</button>
+        </div>
+
+        <div class="settings-sec">
+          <h3>📦 Téléchargement du projet</h3>
+          <p class="setting-desc" style="margin-bottom:12px;">Télécharge l'archive complète du code source mis à jour ou uniquement les fichiers modifiés.</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="/download/zip" class="btn-pill" style="text-decoration:none; padding:10px 18px; font-size:13px;" download="dnb-reviz-complet.zip">
+              📥 Télécharger tout le projet (ZIP)
+            </a>
+            <a href="/download/modified" class="btn-pill-van" style="text-decoration:none; padding:10px 18px; font-size:13px;" download="dnb-reviz-fichiers-modifies.zip">
+              📄 Télécharger les fichiers modifiés seuls (ZIP)
+            </a>
+          </div>
         </div>
       </div>
     </section>
@@ -1579,6 +1412,402 @@
     </div>
     <div class="mact mt-3">
       <button class="btn-pill" onclick="closeModal('m-quiz-answers')">Fermer la correction</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODALS EXERCICES IA ================= -->
+
+<!-- Modal: Créer un exercice avec l'IA -->
+<div id="m-create-exercice" class="moverlay" onclick="closeOnOut(event, 'm-create-exercice')">
+  <div class="mbox" style="max-width:680px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h2 style="margin:0; font-size:22px;">✨ Créer un exercice avec l'IA</h2>
+      <button class="btn-ghost btn-sm" onclick="closeModal('m-create-exercice')">✕</button>
+    </div>
+    <p class="caption" style="margin-top:-8px; margin-bottom:20px;">L'IA spécialisée va générer un entraînement sur-mesure basé sur ton programme et tes vrais documents de cours.</p>
+
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <!-- Matière -->
+      <div class="input-group">
+        <label for="ex-create-subject">Matière *</label>
+        <select id="ex-create-subject" onchange="handleExerciceSubjectChange(event)">
+          <option value="Mathématiques">📐 Mathématiques</option>
+          <option value="Français">📚 Français &amp; Littérature</option>
+          <option value="Histoire-Géographie">🌍 Histoire-Géographie &amp; EMC</option>
+          <option value="Physique-Chimie">🔬 Physique-Chimie</option>
+          <option value="SVT">🧬 SVT (Sciences de la Vie et de la Terre)</option>
+          <option value="Anglais">🇬🇧 Anglais</option>
+          <option value="Espagnol">🇪🇸 Espagnol</option>
+          <option value="Philosophie">💭 Philosophie</option>
+          <option value="SES">📊 SES (Sciences Économiques &amp; Sociales)</option>
+          <option value="NSI">💻 NSI (Numérique et Sciences Informatiques)</option>
+          <option value="Technologie">⚙️ Technologie</option>
+          <option value="autre">✏️ Autre (matière personnalisée)...</option>
+        </select>
+        <div id="ex-create-subject-other-wrap" style="display:none; margin-top:8px;">
+          <input type="text" id="ex-create-subject-other" placeholder="Précise ta matière (ex: Droit, Économie de gestion, Musique...)">
+        </div>
+      </div>
+
+      <!-- Chapitre / Thème -->
+      <div class="input-group">
+        <label for="ex-create-topic">Chapitre / Thème abordé *</label>
+        <input type="text" id="ex-create-topic" placeholder="Ex : Fonctions dérivées et convexité, ou La Guerre Froide...">
+      </div>
+
+      <!-- Lien avec un cours ou quiz liké -->
+      <div class="input-group">
+        <label for="ex-create-linked-item">
+          Lier à un cours, une fiche ou un quiz que tu as aimé ❤️
+        </label>
+        <select id="ex-create-linked-item">
+          <option value="">-- Aucun lien (exercice autonome) --</option>
+        </select>
+        <span class="caption" style="margin-top:4px;">Permet à l'IA d'incorporer les notions et méthodes du document que tu as enregistré.</span>
+      </div>
+
+      <!-- PDF de cours -->
+      <div class="input-group">
+        <label>Documents &amp; PDF de cours authentiques (recommandé pour du concret)</label>
+        <div class="ex-pdf-dropzone" id="ex-pdf-dropzone" onclick="document.getElementById('ex-pdf-files').click()">
+          <input type="file" id="ex-pdf-files" accept=".pdf" multiple style="display:none;" onchange="handleExercicePDFUpload(event)">
+          <div style="font-size:26px; margin-bottom:6px;">📎</div>
+          <div style="font-weight:600; font-size:14px;">Glisse tes PDF de cours ici ou clique pour parcourir</div>
+          <div class="caption">L'IA lira directement le document (méthodes, énoncés, schémas de cours) pour faire des exercices authentiques.</div>
+        </div>
+        <div id="ex-pdf-list" class="mt-2" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
+      <!-- Détails et niveau pour l'IA -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="input-group">
+          <label for="ex-create-level">Niveau / Type du contrôle</label>
+          <select id="ex-create-level">
+            <option value="Contrôle continu standard">Contrôle continu standard</option>
+            <option value="Devoir Surveillé (DS) type examen">Devoir Surveillé (DS) type examen</option>
+            <option value="Brevet des collèges (3e)">Brevet des collèges (3e)</option>
+            <option value="Baccalauréat (1ère / Terminale)">Baccalauréat (1ère / Terminale)</option>
+            <option value="Classe préparatoire / Concours">Classe préparatoire / Concours</option>
+            <option value="Supérieur (Licence / BTS / BUT)">Supérieur (Licence / BTS / BUT)</option>
+            <option value="Révision et consolidation (Accessible)">Révision facile / Consolidation</option>
+            <option value="Approfondissement expert (Exigeant)">Approfondissement expert</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="ex-create-points">Barème officiel</label>
+          <input type="text" value="Strictement sur 20 points" disabled style="opacity:0.8; background:var(--file-bg);">
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label for="ex-create-details">Consignes ou exigences particulières pour l'IA (facultatif)</label>
+        <textarea id="ex-create-details" rows="2" placeholder="Ex : Insister sur la démonstration rédigée, inclure un problème concret de la vie quotidienne, barème sévère sur les unités..."></textarea>
+      </div>
+
+      <!-- Chronomètre personnalisable (jusqu'à 4h max) -->
+      <div class="ex-timer-box">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:600; font-size:14px; display:flex; align-items:center; gap:6px;">
+              <span>⏱️ Chronomètre d'épreuve</span>
+              <span class="ex-badge-soft">Jusqu'à 4h max</span>
+            </div>
+            <div class="caption">Une sonnerie d'examen retentit quand le temps est écoulé pour s'entraîner en temps limité.</div>
+          </div>
+          <input type="checkbox" id="ex-enable-timer" checked onchange="toggleExerciceTimerFields(event)" style="width:20px; height:20px; cursor:pointer;">
+        </div>
+
+        <div id="ex-timer-config" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="15" onclick="setExerciceDuration(15)">15 min</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="30" onclick="setExerciceDuration(30)">30 min</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="45" onclick="setExerciceDuration(45)">45 min</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn active" data-min="60" onclick="setExerciceDuration(60)">1h</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="90" onclick="setExerciceDuration(90)">1h30</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="120" onclick="setExerciceDuration(120)">2h</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="180" onclick="setExerciceDuration(180)">3h</button>
+          <button type="button" class="btn-ghost btn-sm ex-timer-btn" data-min="240" onclick="setExerciceDuration(240)">4h (Max)</button>
+          <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+            <input type="number" id="ex-custom-duration" min="5" max="240" value="60" style="width:75px; padding:6px 8px; border-radius:8px; border:1px solid var(--hl); font-size:13px;" onchange="handleCustomDurationInput(event)">
+            <span style="font-size:12px; color:var(--ink-m);">min</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Choix des 2 options de réalisation -->
+      <div class="input-group">
+        <label>Mode de réalisation du sujet *</label>
+        <div class="ex-mode-grid">
+          <label class="ex-mode-card active" id="ex-mode-card-clavier" onclick="selectExerciceMode('clavier')">
+            <input type="radio" name="ex-mode-choice" value="clavier" checked style="display:none;">
+            <div class="ex-mode-icon">💻</div>
+            <div style="font-weight:700; font-size:14px; margin-bottom:4px;">Sur ordinateur / téléphone</div>
+            <div class="caption" style="font-size:12px;">Saisis tes réponses directement au clavier dans chaque bloc de texte dédié.</div>
+          </label>
+          <label class="ex-mode-card" id="ex-mode-card-papier" onclick="selectExerciceMode('papier')">
+            <input type="radio" name="ex-mode-choice" value="papier" style="display:none;">
+            <div class="ex-mode-icon">📝</div>
+            <div style="font-weight:700; font-size:14px; margin-bottom:4px;">Sur feuille manuscrite</div>
+            <div class="caption" style="font-size:12px;">Écris au stylo sur ta feuille, puis prends en photo ta copie pour la faire corriger par l'IA.</div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loader -->
+    <div id="ex-create-loading" style="display:none; text-align:center; padding:24px 0;">
+      <div class="spinner" style="margin:0 auto 12px;"></div>
+      <div style="font-weight:600; color:var(--ink);">Le professeur IA prépare votre sujet d'exercice...</div>
+      <div class="caption" style="margin-top:4px;">Analyse des PDF de cours et calibrage rigoureux du barème sur 20 points.</div>
+    </div>
+
+    <div class="mact mt-4" id="ex-create-actions">
+      <button class="btn-ghost" onclick="closeModal('m-create-exercice')">Annuler</button>
+      <button class="btn-pill" onclick="handleGenerateAIExercice()">✨ Générer l'exercice avec l'IA</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Session d'exercice (Passation & saisie des réponses) -->
+<div id="m-take-exercice" class="moverlay" style="padding:10px;">
+  <div class="mbox" style="max-width:920px; width:95%; max-height:94vh;">
+    <!-- Exercise Session Header -->
+    <div class="ex-take-header">
+      <div style="flex:1;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <span class="type-tag" id="ex-take-subject-badge" style="background:var(--primary-l); color:var(--primary-f); font-weight:700;">Matière</span>
+          <span class="type-tag" id="ex-take-level-badge" style="background:var(--file-bg); color:var(--ink);">Niveau</span>
+          <span class="type-tag" id="ex-take-mode-badge" style="background:rgba(52,199,89,.12); color:#248a3d; font-weight:600;">💻 Clavier</span>
+          <span class="type-tag" style="background:rgba(255,149,0,.14); color:#b25e00; font-weight:700;">Barème : 20 pts</span>
+        </div>
+        <h2 id="ex-take-title" style="margin:0 0 4px 0; font-size:22px;">Titre de l'exercice</h2>
+        <div id="ex-take-instructions" class="caption" style="font-size:13px; line-height:1.4;">Consignes générales de l'exercice...</div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="confirmExitExercice()" title="Quitter la session">✕</button>
+    </div>
+
+    <!-- Active Timer Widget -->
+    <div id="ex-take-timer-bar" class="ex-timer-active-bar mt-2">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span id="ex-timer-icon" style="font-size:18px;">⏱️</span>
+          <span style="font-size:13px; font-weight:600;">Temps restant :</span>
+          <span id="ex-timer-display" style="font-family:monospace; font-size:18px; font-weight:800; color:var(--primary);">01:00:00</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="btn-ghost btn-sm" id="btn-timer-pause" onclick="toggleExerciceTimerPause()" style="font-size:12px; padding:3px 8px;">⏸️ Pause</button>
+          <span class="caption" id="ex-timer-status" style="font-size:12px;">Chronomètre actif</span>
+        </div>
+      </div>
+      <div class="ex-timer-progress-track">
+        <div class="ex-timer-progress-fill" id="ex-timer-progress-fill"></div>
+      </div>
+      <div id="ex-timer-alert" style="display:none; font-size:12px; color:var(--danger); font-weight:700; margin-top:6px; animation:pulse 1.2s infinite;">
+        ⏰ Le temps imparti est écoulé ! Finalisez vos réponses et soumettez votre copie pour la correction.
+      </div>
+    </div>
+
+    <!-- Questions Container -->
+    <div id="ex-take-content" class="mt-3" style="display:flex; flex-direction:column; gap:20px;">
+      <!-- Dynamically filled with questions and answer boxes -->
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="ex-take-footer mt-4">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="confirmExitExercice()">Quitter</button>
+        <button class="btn-pill-van" onclick="exportExerciceUncorrectedPDF()" title="Télécharger le sujet et tes réponses sans correction">
+          📄 Exporter la copie (non corrigée)
+        </button>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <button class="btn-pill" style="padding:12px 24px; font-size:15px; font-weight:700;" onclick="openSelfEvaluationModal()">
+          ✨ Corriger avec l'IA
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Système d'auto-évaluation préalable -->
+<div id="m-self-evaluation" class="moverlay" onclick="closeOnOut(event, 'm-self-evaluation')">
+  <div class="mbox" style="max-width:560px;">
+    <div style="text-align:center; margin-bottom:18px;">
+      <div style="font-size:36px; margin-bottom:8px;">🎯</div>
+      <h2 style="margin:0 0 6px 0; font-size:22px;">Auto-évaluation préalable</h2>
+      <p class="caption" style="margin:0;">Avant que le professeur IA neutre et rigoureux ne corrige ta copie, prends du recul et estime tes performances !</p>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:18px;">
+      <!-- Note estimée -->
+      <div class="input-group" style="text-align:center; background:var(--file-bg); padding:16px; border-radius:16px; border:1px solid var(--hl);">
+        <label style="font-weight:700; font-size:14px; margin-bottom:6px;">Quelle note penses-tu mériter sur 20 ?</label>
+        <div style="font-size:42px; font-weight:900; color:var(--primary); margin:6px 0;" id="self-eval-score-display">14 / 20</div>
+        <input type="range" id="self-eval-score-range" min="0" max="20" step="0.5" value="14" style="width:100%; accent-color:var(--primary); cursor:pointer;" oninput="handleSelfEvalScoreChange(event)">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--ink-m); margin-top:4px;">
+          <span>0 (Insuffisant)</span>
+          <span>10 (Moyenne)</span>
+          <span>20 (Parfait)</span>
+        </div>
+      </div>
+
+      <!-- Niveau de confiance en étoiles -->
+      <div class="input-group" style="text-align:center;">
+        <label style="font-weight:600; font-size:13px; margin-bottom:6px;">Ton niveau de confiance global sur cette épreuve</label>
+        <div class="ex-stars-row" id="self-eval-stars">
+          <span class="ex-star active" data-val="1" onclick="setSelfEvalStars(1)">★</span>
+          <span class="ex-star active" data-val="2" onclick="setSelfEvalStars(2)">★</span>
+          <span class="ex-star active" data-val="3" onclick="setSelfEvalStars(3)">★</span>
+          <span class="ex-star active" data-val="4" onclick="setSelfEvalStars(4)">★</span>
+          <span class="ex-star" data-val="5" onclick="setSelfEvalStars(5)">★</span>
+        </div>
+        <div class="caption" id="self-eval-confidence-text" style="font-size:12px; margin-top:4px;">Assez confiant (4/5)</div>
+      </div>
+
+      <!-- Commentaires & ressentis -->
+      <div class="input-group">
+        <label for="self-eval-reflections">Tes impressions sur ton travail (facultatif)</label>
+        <textarea id="self-eval-reflections" rows="3" placeholder="Ex : J'étais à l'aise sur les questions 1 et 2, mais j'ai hésité sur la formule de la question 3..."></textarea>
+      </div>
+    </div>
+
+    <!-- Loader pendant la correction -->
+    <div id="ex-grade-loading" style="display:none; text-align:center; padding:24px 0;">
+      <div class="spinner" style="margin:0 auto 12px;"></div>
+      <div style="font-weight:700; font-size:15px; color:var(--ink);">Le professeur spécialisé examine méticuleusement votre copie...</div>
+      <div class="caption" style="margin-top:6px; max-width:400px; margin-left:auto; margin-right:auto;">
+        Application du barème officiel sur 20, analyse des démarches, détection des imprécisions et comparaison avec ton auto-évaluation.
+      </div>
+    </div>
+
+    <div class="mact mt-4" id="self-eval-actions">
+      <button class="btn-ghost" onclick="closeModal('m-self-evaluation')">Retour à ma copie</button>
+      <button class="btn-pill" style="padding:12px 20px;" onclick="submitExerciceForGrading()">
+        🚀 Lancer la correction du professeur IA
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Résultats & Correction détaillée du professeur spécialisé -->
+<div id="m-exercice-result" class="moverlay" style="padding:10px;">
+  <div class="mbox" style="max-width:920px; width:95%; max-height:94vh;">
+    <!-- Results Header -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+      <div>
+        <span class="type-tag" style="background:rgba(88,86,214,.12); color:#5856d6; font-weight:700; margin-bottom:6px; display:inline-block;">Rapport officiel de correction</span>
+        <h2 id="ex-result-title" style="margin:0 0 4px 0; font-size:24px;">Titre de l'exercice</h2>
+        <div id="ex-result-meta" class="caption" style="font-size:13px;">Matière · Niveau · Date</div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="closeModal('m-exercice-result')">✕</button>
+    </div>
+
+    <!-- Big Grade & Self-Eval Comparison Hero Box -->
+    <div class="ex-result-hero">
+      <div class="ex-grade-badge-card">
+        <div class="caption" style="text-transform:uppercase; font-size:11px; letter-spacing:0.5px; font-weight:700;">Note du Professeur IA</div>
+        <div class="ex-grade-number" id="ex-result-score">15.5<span style="font-size:24px; color:var(--ink-m);">/20</span></div>
+        <div class="ex-mention-pill" id="ex-result-mention">Bien</div>
+      </div>
+
+      <div class="ex-eval-comparison-card">
+        <div style="font-weight:700; font-size:14px; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>⚖️ Auto-évaluation vs Note réelle</span>
+        </div>
+        <div style="display:flex; gap:16px; align-items:baseline; margin-bottom:8px;">
+          <div>
+            <span class="caption">Ton estimation : </span>
+            <span id="ex-result-self-score" style="font-weight:700; font-size:16px; color:var(--ink);">14/20</span>
+          </div>
+          <div>
+            <span class="caption">Écart : </span>
+            <span id="ex-result-gap" style="font-weight:800; font-size:16px; color:#248a3d;">+1.5 pt</span>
+          </div>
+        </div>
+        <p class="caption" id="ex-result-self-comment" style="margin:0; line-height:1.4; color:var(--ink);">
+          Commentaire sur la lucidité de l'élève...
+        </p>
+      </div>
+    </div>
+
+    <!-- Professor Appreciation Card -->
+    <div class="ex-appreciation-box mt-3">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+        <span style="font-size:20px;">👨‍🏫</span>
+        <h3 style="margin:0; font-size:16px;">Appréciation générale du professeur</h3>
+        <span class="ex-badge-soft" style="margin-left:auto;">Neutre &amp; Exigeant</span>
+      </div>
+      <p id="ex-result-appreciation" style="margin:0; font-size:14px; line-height:1.6; color:var(--ink); font-style:italic;">
+        Appréciation détaillée...
+      </p>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px;">
+        <div class="ex-strengths-box">
+          <div style="font-weight:700; font-size:13px; color:#248a3d; margin-bottom:6px;">✓ Points forts démontrés :</div>
+          <ul id="ex-result-strengths" style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;"></ul>
+        </div>
+        <div class="ex-improvements-box">
+          <div style="font-weight:700; font-size:13px; color:#c93400; margin-bottom:6px;">⚠ Axes de progrès prioritaires :</div>
+          <ul id="ex-result-improvements" style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Questions Detailed Corrections -->
+    <div style="margin-top:24px;">
+      <h3 style="margin:0 0 12px 0; font-size:17px;">Détail de la correction question par question</h3>
+      <div id="ex-result-questions-container" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Filled dynamically -->
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="ex-take-footer mt-4">
+      <button class="btn-ghost" onclick="closeModal('m-exercice-result')">Fermer</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn-pill" style="padding:12px 20px; font-weight:700;" onclick="exportExerciceGradedPDF()">
+          📥 Exporter la copie corrigée (PDF)
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Filtre Exercices -->
+<div id="m-ex-filter" class="moverlay" onclick="closeOnOut(event, 'm-ex-filter')">
+  <div class="mbox" style="max-width:440px;">
+    <h2>Filtrer les exercices</h2>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div class="input-group">
+        <label>Matière</label>
+        <select id="ex-filter-modal-subject">
+          <option value="all">Toutes les matières</option>
+          <option value="Mathématiques">Mathématiques</option>
+          <option value="Français">Français</option>
+          <option value="Histoire-Géographie">Histoire-Géographie</option>
+          <option value="Physique-Chimie">Physique-Chimie</option>
+          <option value="SVT">SVT</option>
+          <option value="Anglais">Anglais</option>
+          <option value="Espagnol">Espagnol</option>
+          <option value="Philosophie">Philosophie</option>
+          <option value="SES">SES</option>
+          <option value="NSI">NSI</option>
+          <option value="autre">Autre</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Tri</label>
+        <select id="ex-filter-modal-sort">
+          <option value="newest">Plus récents d'abord</option>
+          <option value="oldest">Plus anciens d'abord</option>
+          <option value="score_desc">Meilleures notes d'abord</option>
+          <option value="score_asc">Notes à retravailler d'abord</option>
+        </select>
+      </div>
+    </div>
+    <div class="mact mt-3">
+      <button class="btn-ghost" onclick="closeModal('m-ex-filter')">Annuler</button>
+      <button class="btn-pill" onclick="applyExerciceModalFilter()">Appliquer</button>
     </div>
   </div>
 </div>

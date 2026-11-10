@@ -1,0 +1,6 @@
+{
+  "name": "DnB Reviz",
+  "description": "Plateforme d'apprentissage et de révisions scolaires avec générateur d'exercices IA, fiches, quiz, correction personnalisée et chronomètre.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

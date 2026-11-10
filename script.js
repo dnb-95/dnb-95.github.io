@@ -20,7 +20,7 @@ const db   = getFirestore(app);
 window.emailjs.init("2VkygefcXxbSOlhFX");
 
 const GROQ_API_URL = "https://groqrelay.greninja71144.workers.dev";
-const GROQ_MODEL   = "openai/gpt-oss-120b"; 
+const GROQ_MODEL   = "deepseek-r1-distill-llama-70b"; 
 
 
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -63,8 +63,6 @@ window._pubFeedUnsub = null;
 window._dmChatsUnsub = null;
 window._dmMsgsUnsub  = null;
 window._currentViewedUser = null;
-// Invalide les rendus de profils différés lorsqu’on navigue vers une page interne.
-window._profileRenderToken = 0;
 
 window._filterContext = 'cours';
 window.filterVisibleContent = (items, type = 'post') => {
@@ -604,8 +602,7 @@ onSnapshot(collection(db, "users"), snap => {
   if (document.getElementById("page-fichesrev").classList.contains("active")) loadFRFeed();
   if (document.getElementById("page-quiz").classList.contains("active")) loadQuizFeed();
   
-  const activeProfileHash = decodeURIComponent(String(window.location.hash || "").replace(/^#/, "")).toLowerCase();
-  if (window._currentViewedUser && activeProfileHash === String(window._currentViewedUser.username || "").toLowerCase()) {
+  if (window._currentViewedUser) {
     renderPublicProfile(window._currentViewedUser.username);
     if (window._pubTabActive === 'likes') renderPubLikes();
   }
@@ -759,8 +756,8 @@ function handleHashChange() {
 
   const target = decodeURIComponent(hash.substring(1)).toLowerCase().trim();
   const internalTargets = new Set([
-    'accueil', 'classement', 'cours', 'fichesrev', 'quiz', 'exercices', 'creerquiz',
-    'messages', 'depot', 'pub-profil', 'profil', 'setting', 'admin', 'statistiques'
+    'accueil', 'classement', 'cours', 'fichesrev', 'quiz', 'creerquiz',
+    'messages', 'depot', 'pub-profil', 'profil', 'setting', 'admin', 'statistiques', 'exercices'
   ]);
 
   if (target === 'matieres') {
@@ -779,13 +776,6 @@ function handleHashChange() {
 
 function showInternalView(target) {
   if (target === 'matieres') target = 'accueil';
-
-  // Une navigation interne doit désactiver tout profil public encore mémorisé.
-  // Sans cela, un ancien callback Firebase/setTimeout peut rouvrir un profil
-  // supprimé et afficher « Membre introuvable » au-dessus de la page demandée.
-  window._profileRenderToken = (window._profileRenderToken || 0) + 1;
-  window._currentViewedUser = null;
-
   if (target === 'admin') {
     const isAdmin = currentUser && (currentUser.role === 'admin' || (currentUser.subRoles && currentUser.subRoles.includes('admin')));
     if (!isAdmin) { 
@@ -829,7 +819,7 @@ function showInternalView(target) {
 
   if (target === 'messages') loadDMChats();
   if (target === 'quiz') loadQuizFeed();
-  if (target === 'exercices') loadExercisesUI();
+  if (target === 'exercices') loadExercicesFeed();
   if (target === 'setting') { loadAIQuizHistory(); loadAnimationsSetting(); }
   if (target === 'cours') loadCoursFeed();
   if (target === 'fichesrev') loadFRFeed();
@@ -2169,17 +2159,16 @@ window.getPostHTML = (p, context) => {
     const u = (f.url || "");
     const lowerU = u.toLowerCase();
     const t = (f.type || "").toLowerCase();
-    const pathname = (() => { try { return new URL(u, window.location.href).pathname.toLowerCase(); } catch (_) { return lowerU.split(/[?#]/)[0]; } })();
     const yt = getYouTubeEmbed(u);
-    const fileName = (f.name || "").toLowerCase();
-    const isPDF = t === "application/pdf" || pathname.endsWith(".pdf") || fileName.endsWith(".pdf");
-    const isVideo = !isPDF && (t.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(pathname) || /\.(mp4|webm|mov|m4v)$/i.test(fileName));
-    const knownNonImage = /\.(pdf|doc|docx|xls|xlsx|xlsm|ppt|pptx|csv|txt|rtf|zip|rar|7z|odt|ods|odp)$/i.test(pathname) ||
-      /\.(pdf|doc|docx|xls|xlsx|xlsm|ppt|pptx|csv|txt|rtf|zip|rar|7z|odt|ods|odp)$/i.test(fileName);
-    const isImageExtension = /\.(jpeg|jpg|gif|png|webp|avif|bmp)$/i.test(pathname) || /\.(jpeg|jpg|gif|png|webp|avif|bmp)$/i.test(fileName);
-    const cloudinaryImagePath = /\/image\/upload\//i.test(pathname);
-    const isImg = !isPDF && !isVideo && !knownNonImage &&
-      (t.startsWith("image/") || isImageExtension || ((!t || t === "application/octet-stream") && cloudinaryImagePath));
+    const nonImageExt = /\.(xlsx?|csv|docx?|pptx?|odt|ods|odp|pdf|zip|rar|7z|tar|gz|txt|json|py|js|html|css|mp4|webm|mp3|wav|ogg)(\?.*)?$/i;
+    const isExplicitNonImg = nonImageExt.test(lowerU) || nonImageExt.test((f.name || "").toLowerCase());
+    const isPDF = t === "application/pdf" || lowerU.endsWith(".pdf") || (f.name || "").toLowerCase().endsWith(".pdf");
+    const isVideo = !isPDF && (t === "video/mp4" || lowerU.endsWith(".mp4"));
+    const isImg = !isPDF && !isVideo && !isExplicitNonImg && (
+      t.startsWith("image/") ||
+      Boolean(lowerU.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp|ico|avif)(\?.*)?$/i)) ||
+      (lowerU.includes("res.cloudinary.com") && !lowerU.includes("/raw/") && !lowerU.includes("/files/") && Boolean(lowerU.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp|ico|avif)(\?.*)?$/i)))
+    );
     if (yt) youtube = { url: u, embedUrl: yt, name: f.name || "YouTube", type: "video/youtube" };
     else if (isImg) images.push({ ...f, kind: "image", _order: index });
     else if (isVideo) videos.push({ ...f, kind: "video", _order: index });
@@ -2224,11 +2213,20 @@ window.getPostHTML = (p, context) => {
   if (docs.length > 0) {
     fileChips = docs.map(d => {
       const cleanName = d.name || p.title || "Document";
-      const isPDF = d.type === "application/pdf" || (d.url || "").toLowerCase().endsWith(".pdf");
+      const lower = ((d.url || "") + " " + cleanName).toLowerCase();
+      const isPDF = d.type === "application/pdf" || lower.includes(".pdf");
+      const isExcel = lower.includes(".xlsx") || lower.includes(".xls") || lower.includes(".csv");
+      const isWord = lower.includes(".docx") || lower.includes(".doc") || lower.includes(".odt");
+      const isZip = lower.includes(".zip") || lower.includes(".rar") || lower.includes(".7z");
+      let icon = "🔗";
+      if (isExcel) icon = "📊";
+      else if (isPDF) icon = "📄";
+      else if (isWord) icon = "📝";
+      else if (isZip) icon = "📦";
       return `
       <div class="file-chip mt-1">
         <div class="file-chip-info" title="${esc(cleanName)}">
-          <span style="font-size:22px">${isPDF ? "📄" : "🔗"}</span>
+          <span style="font-size:22px">${icon}</span>
           <span>${cleanName}</span>
         </div>
         <a href="${d.url}" target="_blank" rel="noopener" class="btn-download">📥 Consulter</a>
@@ -3138,9 +3136,6 @@ function escapeHTML(str) {
 }
 
 window.renderPublicProfile = (uname) => {
-  const renderToken = (window._profileRenderToken || 0) + 1;
-  window._profileRenderToken = renderToken;
-
   document.querySelectorAll(".page-view").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".nav-tab").forEach(b => b.classList.remove("active"));
   
@@ -3158,17 +3153,12 @@ window.renderPublicProfile = (uname) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   setTimeout(() => {
-    // Le profil n’est rendu que si l’utilisateur est toujours sur cette demande.
-    // Une navigation vers Exercices (ou une autre page interne) annule ce rendu.
-    if (renderToken !== window._profileRenderToken) return;
-
     const targetUser = window.usersMap.get(uname);
-    if (!targetUser) {
-      loading.style.display = "none";
-      window._currentViewedUser = null;
-      showToast("Membre introuvable");
-      window.location.hash = "#accueil";
-      return;
+    if (!targetUser) { 
+      loading.style.display = "none"; 
+      showToast("Membre introuvable"); 
+      window.location.hash = "#accueil"; 
+      return; 
     }
 
     loading.style.display = "none";
@@ -3641,10 +3631,19 @@ window.openChat = async (chatId, partnerUname) => {
       
       let attachHtml = "";
       if (m.fileUrl) {
-         if (m.fileUrl.match(/\.(jpeg|jpg|gif|png|webp)$/i) || m.fileUrl.includes("res.cloudinary.com/")) {
+         const nonImg = /\.(xlsx?|csv|docx?|pptx?|odt|ods|odp|pdf|zip|rar|7z|tar|gz|txt|json|py|js|html|css)(\?.*)?$/i;
+         const isImage = !nonImg.test(m.fileUrl) && (
+           Boolean(m.fileUrl.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp|ico|avif)(\?.*)?$/i)) ||
+           (m.fileUrl.includes("res.cloudinary.com/") && !m.fileUrl.includes("/raw/") && !m.fileUrl.includes("/files/") && Boolean(m.fileUrl.match(/\.(jpeg|jpg|gif|png|webp|svg|bmp|ico|avif)(\?.*)?$/i)))
+         );
+         if (isImage) {
            attachHtml = `<div style="margin-bottom:6px;"><a href="${m.fileUrl}" target="_blank"><img src="${m.fileUrl}" style="max-width:100%;border-radius:8px;max-height:200px;object-fit:cover;"></a></div>`;
          } else {
-           attachHtml = `<div style="margin-bottom:6px;"><a href="${m.fileUrl}" target="_blank" style="color:inherit;text-decoration:underline;">📄 Pièce jointe</a></div>`;
+           let icon = "📄";
+           if (m.fileUrl.match(/\.(xlsx?|csv)/i)) icon = "📊";
+           else if (m.fileUrl.match(/\.(docx?|odt)/i)) icon = "📝";
+           else if (m.fileUrl.match(/\.(zip|rar|7z)/i)) icon = "📦";
+           attachHtml = `<div style="margin-bottom:6px;"><a href="${m.fileUrl}" target="_blank" style="color:inherit;text-decoration:underline;">${icon} Pièce jointe</a></div>`;
          }
       }
       
@@ -4895,30 +4894,8 @@ window.openUserModal = (isEdit, docId = '', username = '', role = 'élève', sub
     }
   }, 100);
 };
-window.switchTab = (target) => {
-    const normalized = String(target || "").replace(/^#/, "").replace(/^page-/, "").trim().toLowerCase();
-    const internalTargets = new Set([
-      "accueil", "classement", "cours", "fichesrev", "quiz", "exercices", "creerquiz",
-      "messages", "depot", "pub-profil", "profil", "setting", "admin", "statistiques", "matieres"
-    ]);
-
-    if (internalTargets.has(normalized)) {
-      // Annule immédiatement les callbacks de profil, avant même le hashchange.
-      // Cela évite qu’un rendu différé affiche « Membre introuvable » pendant la navigation.
-      window._profileRenderToken = (window._profileRenderToken || 0) + 1;
-      window._currentViewedUser = null;
-
-      // Si le hash est déjà identique, hashchange ne se déclenche pas :
-      // on affiche donc directement la page demandée.
-      if (window.location.hash === `#${normalized}` || (normalized === "matieres" && window.location.hash === "#accueil")) {
-        showInternalView(normalized);
-      } else {
-        window.location.hash = `#${normalized}`;
-      }
-      return;
-    }
-
-    window.location.hash = `#${normalized}`;
+window.switchTab = (target) => { 
+    window.location.hash = `#${target}`; 
 };
 
 window.toggleDrawer = () => {
@@ -4956,1088 +4933,1258 @@ function esc(s) {
 
 window.esc = esc;
 
+/* ========================================================
+   MODULE EXERCICES IA & CORRECTION PROFESSEUR SPÉCIALISÉ
+   ======================================================== */
 
-// ============================================================
-// EXERCICES IA — création, réponses, chronomètre et correction
-// Les copies et leur contexte sont stockés localement par compte.
-// ============================================================
-const EXERCISE_PDF_MAX_TOTAL = 24 * 1024 * 1024;
-const EXERCISE_MAX_PDFS = 4;
-const EXERCISE_MAX_PHOTOS = 6;
-const EXERCISE_MAX_DURATION_MINUTES = 240;
-const EXERCISE_LIBRARY_PREFIX = "dnb_reviz_exercises_v1_";
-window._exerciseLikedSources = [];
-window._exerciseSourceFiles = [];
-window._exercisePaperFiles = [];
-window._exercisePaperImages = [];
-window._exercisePhotoSessionCache = new Map();
-window._exerciseActive = null;
-window._exerciseTimerInterval = null;
-window._exercisePdfModulePromise = null;
-window._exerciseOcrModulePromise = null;
+window._exUploadedPDFs = [];
+window._exPaperPhotos = [];
+window._exDuration = 60;
+window._exTimerActive = true;
+window._exTimerInterval = null;
+window._exRemainingSeconds = 0;
+window._exTotalSeconds = 0;
+window._exTimerPaused = false;
+window._exMode = "clavier";
+window._currentExercice = null;
+window._currentExerciceAnswers = [];
+window._currentSelfEval = { confidenceStars: 4, estimatedScore: 14, reflections: "" };
+window._exerciceFilterTab = "all";
+window._exerciceSubjectFilter = "all";
+window._exerciceSortOrder = "newest";
 
-function exercisePhotoStorageKey(exerciseId) {
-  return `${String(window.currentUser?.username || "invité")}::${exerciseId}`;
-}
-function openExercisePhotoDB() {
-  return new Promise((resolve, reject) => {
-    if (!("indexedDB" in window)) return reject(new Error("IndexedDB indisponible."));
-    const request = indexedDB.open("DnBRevizExercisePhotos", 1);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains("photos")) database.createObjectStore("photos", { keyPath: "key" });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Ouverture du stockage photo impossible."));
-  });
-}
-async function saveExercisePaperImages(exerciseId, images) {
-  window._exercisePhotoSessionCache.set(exerciseId, images);
-  const database = await openExercisePhotoDB();
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction("photos", "readwrite");
-    transaction.objectStore("photos").put({ key: exercisePhotoStorageKey(exerciseId), images });
-    transaction.oncomplete = () => { database.close(); resolve(); };
-    transaction.onerror = () => { database.close(); reject(transaction.error); };
-  });
-}
-async function loadExercisePaperImages(exerciseId) {
-  if (window._exercisePhotoSessionCache.has(exerciseId)) return window._exercisePhotoSessionCache.get(exerciseId);
+// Audio Bell Chime generator via Web Audio API (exam end sound)
+function playExamBellChime() {
   try {
-    const database = await openExercisePhotoDB();
-    const value = await new Promise((resolve, reject) => {
-      const transaction = database.transaction("photos", "readonly");
-      const request = transaction.objectStore("photos").get(exercisePhotoStorageKey(exerciseId));
-      request.onsuccess = () => resolve(request.result?.images || []);
-      request.onerror = () => reject(request.error);
-    });
-    database.close();
-    window._exercisePhotoSessionCache.set(exerciseId, value);
-    return value;
-  } catch (error) {
-    console.warn("Photos de la copie papier non disponibles :", error);
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // Dual-harmonic chime 1 (High tone)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.exponentialRampToValueAtTime(440, now + 1.2);
+    gain1.gain.setValueAtTime(0.4, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 1.2);
+
+    // Dual-harmonic chime 2 (Warm bell fundamental)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1174.66, now + 0.28);
+    osc2.frequency.exponentialRampToValueAtTime(587.33, now + 1.6);
+    gain2.gain.setValueAtTime(0.5, now + 0.28);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.28);
+    osc2.stop(now + 1.6);
+
+    // Final resonant bell chime 3
+    const osc3 = ctx.createOscillator();
+    const gain3 = ctx.createGain();
+    osc3.type = "triangle";
+    osc3.frequency.setValueAtTime(1318.51, now + 0.6);
+    osc3.frequency.exponentialRampToValueAtTime(659.25, now + 2.0);
+    gain3.gain.setValueAtTime(0.35, now + 0.6);
+    gain3.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    osc3.connect(gain3);
+    gain3.connect(ctx.destination);
+    osc3.start(now + 0.6);
+    osc3.stop(now + 2.0);
+  } catch (e) {
+    console.warn("Audio Context non disponible :", e);
+  }
+}
+
+// Storage helpers
+function getStoredExercices() {
+  try {
+    const raw = localStorage.getItem("dnb_exercices_history");
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
     return [];
   }
 }
-async function deleteExercisePaperImages(exerciseId) {
-  window._exercisePhotoSessionCache.delete(exerciseId);
-  try {
-    const database = await openExercisePhotoDB();
-    await new Promise((resolve, reject) => {
-      const transaction = database.transaction("photos", "readwrite");
-      transaction.objectStore("photos").delete(exercisePhotoStorageKey(exerciseId));
-      transaction.oncomplete = resolve;
-      transaction.onerror = () => reject(transaction.error);
-    });
-    database.close();
-  } catch (error) {
-    console.warn("Suppression des photos de copie impossible :", error);
-  }
-}
 
-function exerciseEscape(value) {
-  return String(value ?? "").replace(/[&<>"']/g, ch => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;', "'": "&#39;"
-  }[ch]));
-}
-function exerciseCurrentUserKey() {
-  return EXERCISE_LIBRARY_PREFIX + String(window.currentUser?.username || "invité").replace(/[^a-zA-Z0-9_.-]/g, "_");
-}
-function exerciseLoadLibrary() {
+function saveExerciceToHistory(ex) {
   try {
-    const value = JSON.parse(localStorage.getItem(exerciseCurrentUserKey()) || "[]");
-    return Array.isArray(value) ? value : [];
-  } catch (error) {
-    console.warn("Bibliothèque d'exercices illisible :", error);
-    return [];
-  }
-}
-function exerciseSaveLibrary() {
-  if (!window._exerciseActive) return;
-  const library = exerciseLoadLibrary();
-  const index = library.findIndex(item => item.id === window._exerciseActive.id);
-  if (index >= 0) library[index] = window._exerciseActive;
-  else library.unshift(window._exerciseActive);
-  const compactLibrary = library.slice(0, 20).map(item => ({
-    ...item,
-    // Binary photo data lives in IndexedDB, not localStorage.
-    paperImages: (item.paperImages || []).map(image => ({ name: image.name || "Copie papier" }))
-  }));
-  try {
-    localStorage.setItem(exerciseCurrentUserKey(), JSON.stringify(compactLibrary));
-    renderSavedExercises();
-  } catch (error) {
-    console.error("Enregistrement local impossible :", error);
-    showToast("Stockage local plein : exporte tes exercices puis supprime les anciens.");
-  }
-}
-function exerciseGetActive() {
-  return window._exerciseActive;
-}
-function exerciseSetPanel(panel) {
-  ["exercise-home-panel", "exercise-setup", "exercise-workspace"].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = id === panel ? "block" : "none";
-  });
-}
-function exerciseShowWorkspace() {
-  exerciseSetPanel("exercise-workspace");
-  const preview = document.getElementById("exercise-preview-state");
-  const active = document.getElementById("exercise-active-state");
-  const self = document.getElementById("exercise-self-assess");
-  const result = document.getElementById("exercise-correction-result");
-  const ex = exerciseGetActive();
-  if (!ex) return;
-  document.getElementById("exercise-work-title").textContent = ex.title || ex.topic;
-  document.getElementById("exercise-active-title").textContent = ex.title || ex.topic;
-  document.getElementById("exercise-work-meta").textContent =
-    `${ex.subject} · ${ex.topic} · ${ex.questions.length} questions · ${ex.questions.reduce((sum, q) => sum + (Number(q.points) || 0), 0)} points`;
-  document.getElementById("exercise-work-source").textContent =
-    ex.sourceSummary || "Exercice préparé à partir du thème et des consignes que tu as indiqués.";
-  document.getElementById("exercise-preview-questions").innerHTML = ex.questions.map((q, i) => `
-    <article class="exercise-question-card">
-      <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${Number(q.points) || 0} pt${Number(q.points) > 1 ? "s" : ""}</span></div>
-      <p>${exerciseEscape(q.question)}</p>
-    </article>`).join("");
-
-  if (ex.completed && ex.correction) {
-    preview.style.display = "none";
-    active.style.display = "none";
-    self.style.display = "none";
-    result.style.display = "block";
-    renderExerciseCorrection();
-    return;
-  }
-  if (ex.completed) {
-    preview.style.display = "none";
-    active.style.display = "none";
-    self.style.display = "block";
-    result.style.display = "none";
-    document.getElementById("exercise-self-rating").value = String(ex.selfRating || 3);
-    document.getElementById("exercise-self-comment").value = ex.selfComment || "";
-    updateExerciseSelfRating();
-    return;
-  }
-  if (ex.startedAt) {
-    preview.style.display = "none";
-    active.style.display = "block";
-    self.style.display = "none";
-    result.style.display = "none";
-    renderExerciseAnswerFields();
-    startExerciseTimerDisplay();
-  } else {
-    preview.style.display = "block";
-    active.style.display = "none";
-    self.style.display = "none";
-    result.style.display = "none";
-    stopExerciseTimer();
-    document.getElementById("exercise-live-timer").style.display = "none";
-  }
-}
-function renderSavedExercises() {
-  const container = document.getElementById("exercise-saved-list");
-  if (!container) return;
-  const list = exerciseLoadLibrary().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  if (!list.length) {
-    container.innerHTML = `<div class="empty-text">Aucun exercice créé pour le moment. Clique sur « Créer un exercice avec l'IA » pour commencer.</div>`;
-    return;
-  }
-  container.innerHTML = list.map(item => {
-    const done = !!item.correction;
-    const date = item.createdAt ? new Date(item.createdAt).toLocaleDateString("fr-FR") : "";
-    const note = done ? `<span class="exercise-library-grade">${Number(item.correction.score).toFixed(1).replace(".", ",")}/20</span>` : "";
-    const state = done ? "Corrigé" : item.completed ? "À corriger" : item.startedAt ? "En cours" : "Prêt";
-    return `
-      <article class="exercise-library-card">
-        <button class="exercise-library-open" type="button" onclick="openSavedExercise('${exerciseEscape(item.id)}')">
-          <span class="exercise-library-icon">✍️</span>
-          <span class="exercise-library-copy">
-            <strong>${exerciseEscape(item.topic || item.title || "Exercice")}</strong>
-            <span>${exerciseEscape(item.subject || "Matière")} · ${date} · ${exerciseEscape(state)}</span>
-          </span>
-          ${note}
-        </button>
-        <button class="exercise-library-delete" type="button" title="Supprimer cet exercice" aria-label="Supprimer cet exercice" onclick="deleteSavedExercise('${exerciseEscape(item.id)}')">×</button>
-      </article>`;
-  }).join("");
-}
-window.loadExercisesUI = () => {
-  renderSavedExercises();
-  if (!window._exerciseActive) {
-    exerciseSetPanel("exercise-home-panel");
-  }
-};
-
-function populateExerciseSubjects() {
-  const select = document.getElementById("exercise-subject");
-  if (!select) return;
-  const subjects = [...(window.subjectsMap?.keys?.() || [])].filter(Boolean).sort((a, b) => a.localeCompare(b, "fr"));
-  const previous = select.value;
-  select.innerHTML = `<option value="">Choisir une matière…</option>` +
-    subjects.map(name => `<option value="${exerciseEscape(name)}">${exerciseEscape(name)}</option>`).join("") +
-    `<option value="autre">Autre</option>`;
-  if (previous && [...select.options].some(option => option.value === previous)) select.value = previous;
-};
-window.openExerciseCreator = async () => {
-  stopExerciseTimer();
-  window._exerciseActive = null;
-  populateExerciseSubjects();
-  document.getElementById("exercise-topic").value = "";
-  document.getElementById("exercise-details").value = "";
-  document.getElementById("exercise-count").value = "8";
-  document.getElementById("exercise-subject-custom").value = "";
-  document.getElementById("exercise-subject-custom").style.display = "none";
-  document.getElementById("exercise-subject").value = "";
-  document.getElementById("exercise-timer-enabled").checked = false;
-  document.getElementById("exercise-timer-minutes").value = "60";
-  document.getElementById("exercise-timer-options").style.display = "none";
-  document.querySelector('input[name="exercise-method"][value="digital"]').checked = true;
-  selectExerciseMethod("digital");
-  window._exerciseSourceFiles = [];
-  window._exercisePaperFiles = [];
-  document.getElementById("exercise-pdf-files").value = "";
-  const paperInput = document.getElementById("exercise-paper-photos");
-  if (paperInput) paperInput.value = "";
-  document.getElementById("exercise-pdf-status").textContent = "Aucun PDF sélectionné.";
-  document.getElementById("exercise-generation-status").style.display = "none";
-  document.getElementById("exercise-generate-button").disabled = false;
-  exerciseSetPanel("exercise-setup");
-  await reloadExerciseLikedSources();
-};
-window.closeExerciseSetup = () => {
-  document.getElementById("exercise-generation-status").style.display = "none";
-  document.getElementById("exercise-generate-button").disabled = false;
-  exerciseSetPanel("exercise-home-panel");
-  renderSavedExercises();
-};
-window.toggleExerciseCustomSubject = () => {
-  const isOther = document.getElementById("exercise-subject").value === "autre";
-  document.getElementById("exercise-subject-custom").style.display = isOther ? "block" : "none";
-};
-window.selectExerciseMethod = method => {
-  const paper = method === "paper";
-  document.getElementById("exercise-method-digital-card").classList.toggle("active", !paper);
-  document.getElementById("exercise-method-paper-card").classList.toggle("active", paper);
-  const radio = document.querySelector(`input[name="exercise-method"][value="${paper ? "paper" : "digital"}"]`);
-  if (radio) radio.checked = true;
-};
-window.toggleExerciseTimer = () => {
-  document.getElementById("exercise-timer-options").style.display =
-    document.getElementById("exercise-timer-enabled").checked ? "flex" : "none";
-};
-
-window.reloadExerciseLikedSources = async () => {
-  const container = document.getElementById("exercise-liked-sources");
-  if (!container) return;
-  if (!window.currentUser?.username) {
-    container.innerHTML = `<p class="caption">Connecte-toi pour charger tes ressources aimées.</p>`;
-    return;
-  }
-  container.innerHTML = `<p class="caption">Recherche de tes cours et quiz aimés…</p>`;
-  try {
-    const username = window.currentUser.username;
-    const [postsSnap, quizzesSnap, aiQuizzesSnap] = await Promise.all([
-      getDocs(query(collection(db, "posts"), where("likes", "array-contains", username))),
-      getDocs(query(collection(db, "quizzes"), where("likes", "array-contains", username))),
-      getDocs(query(collection(db, "ai_quizzes"), where("likes", "array-contains", username)))
-    ]);
-    const sources = [];
-    postsSnap.docs.forEach(d => {
-      const data = d.data();
-      sources.push({ id: `post:${d.id}`, refId: d.id, kind: "post", label: "Cours / fiche", title: data.title || "Document aimé",
-        subject: data.matiere || "", description: data.description || "", files: Array.isArray(data.files) ? data.files : [],
-        fileData: data.fileData || data.url || "", fileType: data.fileType || "", fileName: data.fileName || "" });
-    });
-    quizzesSnap.docs.forEach(d => {
-      const data = d.data();
-      sources.push({ id: `quiz:${d.id}`, refId: d.id, kind: "quiz", label: "Quiz aimé", title: data.title || "Quiz",
-        subject: data.matiere || "", description: data.description || "", questions: Array.isArray(data.questions) ? data.questions : [] });
-    });
-    aiQuizzesSnap.docs.forEach(d => {
-      const data = d.data();
-      sources.push({ id: `ai_quiz:${d.id}`, refId: d.id, kind: "ai_quiz", label: "Quiz IA aimé", title: data.title || "Quiz IA",
-        subject: data.matiere || "", description: data.description || "", questions: Array.isArray(data.questions) ? data.questions : [] });
-    });
-    window._exerciseLikedSources = sources.sort((a, b) => a.title.localeCompare(b.title, "fr"));
-    if (!sources.length) {
-      container.innerHTML = `<p class="caption">Aucun cours ni quiz aimé trouvé. Tu peux tout de même joindre tes PDF ci-dessous.</p>`;
-      return;
+    const list = getStoredExercices();
+    const idx = list.findIndex(item => item.id === ex.id);
+    if (idx >= 0) {
+      list[idx] = ex;
+    } else {
+      list.unshift(ex);
     }
-    container.innerHTML = sources.map(source => `
-      <label class="exercise-source-option">
-        <input type="checkbox" value="${exerciseEscape(source.id)}" class="exercise-source-checkbox">
-        <span><strong>${exerciseEscape(source.title)}</strong><small>${exerciseEscape(source.label)}${source.subject ? " · " + exerciseEscape(source.subject) : ""}</small></span>
-      </label>`).join("");
-  } catch (error) {
-    console.error("Chargement des ressources aimées impossible :", error);
-    container.innerHTML = `<p class="caption">Impossible de charger les likes. Tu peux poursuivre en ajoutant directement tes PDF.</p>`;
+    localStorage.setItem("dnb_exercices_history", JSON.stringify(list));
+  } catch (e) {
+    console.warn("Impossible de sauvegarder l'exercice en local :", e);
   }
+}
+
+// Open creation modal
+window.openCreateExerciceModal = () => {
+  window._exUploadedPDFs = [];
+  const listDiv = document.getElementById("ex-pdf-list");
+  if (listDiv) listDiv.innerHTML = "";
+  
+  // Reset fields
+  const subjSelect = document.getElementById("ex-create-subject");
+  if (subjSelect) subjSelect.value = "Mathématiques";
+  const otherWrap = document.getElementById("ex-create-subject-other-wrap");
+  if (otherWrap) otherWrap.style.display = "none";
+  const otherInput = document.getElementById("ex-create-subject-other");
+  if (otherInput) otherInput.value = "";
+  const topicInput = document.getElementById("ex-create-topic");
+  if (topicInput) topicInput.value = "";
+  const detailsInput = document.getElementById("ex-create-details");
+  if (detailsInput) detailsInput.value = "";
+  
+  // Mode Clavier default
+  selectExerciceMode("clavier");
+
+  // Timer default 60 min
+  setExerciceDuration(60);
+  const timerToggle = document.getElementById("ex-enable-timer");
+  if (timerToggle) timerToggle.checked = true;
+  toggleExerciceTimerFields({ target: { checked: true } });
+
+  // Populate liked courses/quizzes dropdown
+  populateLikedItemsDropdown();
+
+  openModal("m-create-exercice");
 };
 
-window.handleExercisePDFSelect = event => {
-  const files = Array.from(event.target.files || []);
-  const status = document.getElementById("exercise-pdf-status");
-  if (files.length > EXERCISE_MAX_PDFS) {
-    event.target.value = "";
-    window._exerciseSourceFiles = [];
-    status.textContent = `Maximum ${EXERCISE_MAX_PDFS} PDF.`;
-    return showToast(`Maximum ${EXERCISE_MAX_PDFS} PDF autorisés.`);
-  }
-  if (files.some(file => file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf"))) {
-    event.target.value = "";
-    window._exerciseSourceFiles = [];
-    status.textContent = "Seuls les fichiers PDF sont acceptés.";
-    return showToast("Sélectionne uniquement des fichiers PDF.");
-  }
-  const total = files.reduce((sum, file) => sum + file.size, 0);
-  if (total > EXERCISE_PDF_MAX_TOTAL) {
-    event.target.value = "";
-    window._exerciseSourceFiles = [];
-    status.textContent = "Taille totale trop importante.";
-    return showToast("Les PDF ne doivent pas dépasser 24 Mo au total.");
-  }
-  window._exerciseSourceFiles = files;
-  status.textContent = files.length ? files.map(file => `${file.name} (${(file.size / 1024 / 1024).toFixed(1)} Mo)`).join(" · ") : "Aucun PDF sélectionné.";
-};
+function populateLikedItemsDropdown() {
+  const sel = document.getElementById("ex-create-linked-item");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">-- Aucun lien (exercice autonome) --</option>`;
 
-async function loadExercisePdfJs() {
-  if (!window._exercisePdfModulePromise) {
-    window._exercisePdfModulePromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs")
-      .then(module => {
-        const pdfjs = module.default || module;
-        if (pdfjs.GlobalWorkerOptions) {
-          pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
-        }
-        return pdfjs;
+  const myUsername = currentUser ? currentUser.username : "";
+  const allLiked = [];
+
+  // Find liked courses/posts from window._liveCoursData / window._liveFRData
+  const postsPool = [...(window._liveCoursData || []), ...(window._liveFRData || [])];
+  postsPool.forEach(p => {
+    if (p.likes && Array.isArray(p.likes) && (p.likes.includes(myUsername) || !myUsername)) {
+      allLiked.push({
+        type: "cours",
+        id: p.id,
+        title: p.title || "Cours sans titre",
+        subject: p.subject || p.matiere || "Général",
+        author: p.author || "Communauté",
+        summary: (p.desc || p.body || p.title || "").slice(0, 150)
       });
-  }
-  return window._exercisePdfModulePromise;
-}
-async function extractExercisePdfTextFromBytes(bytes, maxPages = 18, maxChars = 18000) {
-  const pdfjs = await loadExercisePdfJs();
-  const loadingTask = pdfjs.getDocument({ data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), disableWorker: true });
-  const pdf = await loadingTask.promise;
-  const pageCount = Math.min(pdf.numPages, maxPages);
-  const parts = [];
-  let totalChars = 0;
-  for (let pageNumber = 1; pageNumber <= pageCount && totalChars < maxChars; pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const pageText = content.items.map(item => item.str || "").join(" ").replace(/\s+/g, " ").trim();
-    if (pageText) {
-      const chunk = `Page ${pageNumber}: ${pageText}`;
-      parts.push(chunk.slice(0, Math.max(0, maxChars - totalChars)));
-      totalChars += chunk.length;
     }
-  }
-  // For scanned PDFs without a text layer, OCR a few pages locally in the browser.
-  if (!parts.length && pageCount > 0) {
-    let worker = null;
-    try {
-      worker = await createExerciseOCRWorker();
-      const ocrPages = Math.min(pageCount, 6);
-      for (let pageNumber = 1; pageNumber <= ocrPages && totalChars < maxChars; pageNumber++) {
-        const page = await pdf.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: 1.35 });
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        await page.render({ canvasContext: context, viewport }).promise;
-        const result = await worker.recognize(canvas);
-        const pageText = String(result.data.text || "").replace(/\s+/g, " ").trim();
-        if (pageText) {
-          const chunk = `Page ${pageNumber} (OCR): ${pageText}`;
-          parts.push(chunk.slice(0, Math.max(0, maxChars - totalChars)));
-          totalChars += chunk.length;
-        }
-        canvas.width = 0;
-        canvas.height = 0;
-      }
-    } catch (error) {
-      console.warn("OCR du PDF scanné impossible :", error);
-    } finally {
-      if (worker) {
-        try { await worker.terminate(); } catch (_) {}
-      }
-    }
-  }
-  const totalPages = pdf.numPages;
-  try { await pdf.destroy(); } catch (_) {}
-  return { text: parts.join("\n"), pagesRead: pageCount, totalPages };
-}
-async function extractExercisePdfFile(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  return extractExercisePdfTextFromBytes(bytes);
-}
-async function extractExercisePdfUrl(url) {
-  const response = await fetch(url, { mode: "cors" });
-  if (!response.ok) throw new Error(`Téléchargement PDF impossible (${response.status})`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return extractExercisePdfTextFromBytes(bytes, 12, 10000);
-}
-function collectExerciseSelectedSources() {
-  const selectedIds = new Set([...document.querySelectorAll(".exercise-source-checkbox:checked")].map(el => el.value));
-  return window._exerciseLikedSources.filter(source => selectedIds.has(source.id));
-}
-async function buildExerciseSourceContext() {
-  const chunks = [];
-  const summaries = [];
-  const selectedSources = collectExerciseSelectedSources();
-  let remainingChars = 20000;
-  for (const source of selectedSources) {
-    const head = `[Ressource aimée — ${source.label}] ${source.title}${source.subject ? " · " + source.subject : ""}\n${source.description || ""}`;
-    chunks.push(head);
-    summaries.push(source.title);
-    remainingChars -= head.length;
-    if (source.questions?.length) {
-      const quizText = source.questions.slice(0, 25).map((question, i) =>
-        `${i + 1}. ${question.question || ""}\nRéponses : ${(question.options || []).join(" | ")}\nRéponse attendue : ${question.options?.[question.correctIndex] || question.answer || ""}\nExplication : ${question.justification || question.explanation || ""}`
-      ).join("\n");
-      chunks.push(quizText.slice(0, Math.max(0, remainingChars)));
-      remainingChars -= quizText.length;
-    }
-    const files = source.files?.length ? source.files : (source.fileData ? [{ url: source.fileData, name: source.fileName, type: source.fileType }] : []);
-    for (const file of files) {
-      const url = file.url || "";
-      const isPdf = (file.type || "").toLowerCase() === "application/pdf" || /\.pdf(?:[?#]|$)/i.test(url);
-      if (!url || !isPdf || remainingChars <= 500) continue;
-      try {
-        const extracted = await extractExercisePdfUrl(url);
-        if (extracted.text) {
-          const section = `[PDF lié à « ${source.title} » — ${file.name || "document"}]\n${extracted.text}`;
-          chunks.push(section.slice(0, remainingChars));
-          remainingChars -= Math.min(section.length, remainingChars);
-        }
-      } catch (error) {
-        console.warn("PDF du cours aimé non accessible pour extraction :", error);
-      }
-    }
-  }
-  for (const file of window._exerciseSourceFiles) {
-    if (remainingChars <= 500) break;
-    const extracted = await extractExercisePdfFile(file);
-    if (!extracted.text.trim()) {
-      throw new Error(`Aucun texte lisible dans « ${file.name} ». S'il s'agit d'un scan, ajoute aussi des consignes dans le champ de précisions.`);
-    }
-    const section = `[PDF ajouté — ${file.name}]\n${extracted.text}`;
-    chunks.push(section.slice(0, remainingChars));
-    remainingChars -= Math.min(section.length, remainingChars);
-    summaries.push(file.name);
-  }
-  return {
-    text: chunks.join("\n\n").slice(0, 22000),
-    summary: summaries.length ? `Ressources utilisées : ${summaries.join(", ")}` : "Aucun document aimé ou PDF joint ; génération basée sur le thème et les consignes saisis."
-  };
-}
-async function callExerciseAI(systemPrompt, userPrompt, maxTokens = 6000) {
-  const response = await fetch(GROQ_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-      temperature: 0.35,
-      max_tokens: maxTokens,
-      response_format: { type: "json_object" }
-    })
   });
-  const bodyText = await response.text();
-  if (!response.ok) throw new Error(`Service IA indisponible (${response.status}) : ${bodyText.slice(0, 300)}`);
-  let payload;
-  try { payload = JSON.parse(bodyText); } catch (_) { throw new Error("Réponse du service IA illisible."); }
-  const content = payload.choices?.[0]?.message?.content;
-  if (!content) throw new Error(payload.error?.message || "L'IA n'a pas renvoyé de contenu.");
-  const match = content.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("La réponse IA ne contient pas de JSON valide.");
-  return JSON.parse(match[0]);
-}
 
-window.generateAIExercise = async () => {
-  const subjectSelect = document.getElementById("exercise-subject").value;
-  const subject = subjectSelect === "autre" ? document.getElementById("exercise-subject-custom").value.trim() : subjectSelect;
-  const topic = document.getElementById("exercise-topic").value.trim();
-  const details = document.getElementById("exercise-details").value.trim();
-  const count = Math.min(15, Math.max(3, parseInt(document.getElementById("exercise-count").value, 10) || 8));
-  const method = document.querySelector('input[name="exercise-method"]:checked')?.value || "digital";
-  const timerEnabled = document.getElementById("exercise-timer-enabled").checked;
-  const duration = Math.min(EXERCISE_MAX_DURATION_MINUTES, Math.max(1, parseInt(document.getElementById("exercise-timer-minutes").value, 10) || 60));
-  if (!subject || !topic) return showToast("Choisis une matière et indique un chapitre ou un thème.");
-  if (subjectSelect === "autre" && !subject) return showToast("Précise la matière.");
-  const button = document.getElementById("exercise-generate-button");
-  const loading = document.getElementById("exercise-generation-status");
-  button.disabled = true;
-  loading.style.display = "flex";
-  try {
-    const source = await buildExerciseSourceContext();
-    const systemPrompt = `Tu es un professeur spécialisé, exigeant, neutre et pédagogue. Tu crées un vrai sujet d'entraînement scolaire, avec un niveau cohérent et un barème précis.
-Réponds uniquement par un objet JSON valide, sans markdown ni texte autour.
-Le JSON doit respecter ce schéma :
-{
- "title":"Titre court",
- "instructions":"Consignes générales",
- "questions":[
-  {"question":"Énoncé complet","type":"question ouverte|étude de document|calcul|problème","points":2,"expectedAnswer":"Éléments de réponse attendus, pour la correction uniquement","rubric":"Critères précis d'attribution des points"}
- ]
-}
-Règles impératives :
-- Crée exactement le nombre de questions demandé, sans répétitions et avec une progression cohérente.
-- Le total des points doit être exactement 20 (répartis entre les questions).
-- Chaque énoncé doit être autonome, compréhensible et suffisamment précis.
-- Les questions doivent pouvoir être traitées dans la durée indiquée ; adapte la longueur et la profondeur à cette durée.
-- Utilise réellement les documents de référence fournis. N'invente pas de contenu prétendument extrait des PDF. Si les documents sont insuffisants, complète avec des connaissances disciplinaires exactes en distinguant les éléments.
-- Ne montre jamais les réponses attendues dans l'énoncé des questions.
-- Privilégie les réponses rédigées, raisonnements, analyses ou exercices concrets plutôt que les QCM.
-- Les attentes de correction doivent être explicites, nuancées et attribuer les points partiels lorsque le raisonnement est pertinent.`;
-    const userPrompt = `Prépare un exercice scolaire.
-Matière : ${subject}
-Chapitre / thème : ${topic}
-Nombre de questions : ${count}
-Mode : ${method === "paper" ? "réponse sur feuille papier" : "réponse numérique au clavier"}
-Durée : ${timerEnabled ? duration + " minutes" : "sans chronomètre"}
-Consignes et niveau du contrôle : ${details || "Niveau intermédiaire adapté à la matière."}
-Ressources :
-${source.text || "Aucune ressource jointe."}
-Résumé des ressources : ${source.summary}
-Retourne uniquement le JSON demandé.`;
-    const data = await callExerciseAI(systemPrompt, userPrompt, 6500);
-    if (!Array.isArray(data.questions) || data.questions.length < 3) throw new Error("L'IA n'a pas produit assez de questions.");
-    const questions = data.questions.slice(0, count).map((q, i) => ({
-      question: String(q.question || `Question ${i + 1}`).trim(),
-      type: String(q.type || "Question ouverte"),
-      points: Math.max(0, Number(q.points) || 0),
-      expectedAnswer: String(q.expectedAnswer || ""),
-      rubric: String(q.rubric || "")
-    }));
-    if (questions.some(q => !q.question)) throw new Error("Une question de l'exercice est vide.");
-    const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
-    if (totalPoints <= 0) {
-      const equalPoints = Math.round((20 / questions.length) * 10) / 10;
-      questions.forEach(q => q.points = equalPoints);
-      const equalTotal = questions.reduce((sum, q) => sum + q.points, 0);
-      questions[questions.length - 1].points = Math.round((questions[questions.length - 1].points + 20 - equalTotal) * 10) / 10;
-    } else if (Math.abs(totalPoints - 20) > 0.05) {
-      const factor = 20 / totalPoints;
-      questions.forEach(q => q.points = Math.round(q.points * factor * 10) / 10);
-      const correctedTotal = questions.reduce((sum, q) => sum + q.points, 0);
-      questions[questions.length - 1].points = Math.round((questions[questions.length - 1].points + (20 - correctedTotal)) * 10) / 10;
+  // Find liked quizzes from window._liveQuizzesData
+  const quizPool = [...(window._liveQuizzesData || []), ...(window._liveAIQuizzesData || [])];
+  quizPool.forEach(q => {
+    if (q.likes && Array.isArray(q.likes) && (q.likes.includes(myUsername) || !myUsername)) {
+      allLiked.push({
+        type: "quiz",
+        id: q.id,
+        title: q.title || "Quiz",
+        subject: q.subject || q.matiere || "Général",
+        author: q.author || "Communauté",
+        summary: `Quiz de ${q.questions?.length || 0} questions`
+      });
     }
-    const exercise = {
-      id: (window.crypto?.randomUUID?.() || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
-      title: String(data.title || `Exercice — ${topic}`),
-      instructions: String(data.instructions || "Réponds de façon structurée et justifie tes raisonnements."),
-      subject, topic, details, method,
-      timerEnabled, durationMinutes: timerEnabled ? duration : 0,
-      questions, answers: {},
-      sourceContext: source.text || "",
-      sourceSummary: source.summary,
-      createdAt: Date.now(),
-      startedAt: 0,
-      timerExpiresAt: 0,
-      timerExpired: false,
-      completed: false,
-      paperTranscript: "",
-      paperImages: [],
-      selfRating: 3,
-      selfComment: "",
-      correction: null
-    };
-    window._exerciseActive = exercise;
-    exerciseSaveLibrary();
-    exerciseShowWorkspace();
-    showToast("Exercice créé. Tu peux commencer quand tu es prêt.");
-  } catch (error) {
-    console.error("Génération d'exercice impossible :", error);
-    showToast(error.message || "Impossible de générer l'exercice.");
-  } finally {
-    button.disabled = false;
-    loading.style.display = "none";
-  }
-};
-
-window.openSavedExercise = async id => {
-  window._exercisePaperFiles = [];
-  const paperInput = document.getElementById("exercise-paper-photos");
-  if (paperInput) paperInput.value = "";
-  const exercise = exerciseLoadLibrary().find(item => item.id === id);
-  if (!exercise) return showToast("Cet exercice n'est plus disponible sur cet appareil.");
-  if (exercise.method === "paper") {
-    exercise.paperImages = await loadExercisePaperImages(id);
-  }
-  window._exerciseActive = exercise;
-  exerciseShowWorkspace();
-};
-window.deleteSavedExercise = async id => {
-  const exercise = exerciseLoadLibrary().find(item => item.id === id);
-  if (!exercise) return;
-  if (!confirm(`Supprimer l'exercice « ${exercise.topic || exercise.title} » ?`)) return;
-  const updated = exerciseLoadLibrary().filter(item => item.id !== id);
-  localStorage.setItem(exerciseCurrentUserKey(), JSON.stringify(updated));
-  await deleteExercisePaperImages(id);
-  if (window._exerciseActive?.id === id) {
-    window._exerciseActive = null;
-    stopExerciseTimer();
-    exerciseSetPanel("exercise-home-panel");
-  }
-  renderSavedExercises();
-};
-window.leaveExerciseWorkspace = () => {
-  stopExerciseTimer();
-  window._exercisePaperFiles = [];
-  const paperInput = document.getElementById("exercise-paper-photos");
-  if (paperInput) paperInput.value = "";
-  window._exerciseActive = null;
-  exerciseSetPanel("exercise-home-panel");
-  renderSavedExercises();
-};
-
-function renderExerciseAnswerFields() {
-  const ex = exerciseGetActive();
-  if (!ex) return;
-  const digital = document.getElementById("exercise-digital-answers");
-  const paper = document.getElementById("exercise-paper-answers");
-  digital.style.display = ex.method === "digital" ? "flex" : "none";
-  paper.style.display = ex.method === "paper" ? "block" : "none";
-  if (ex.method === "digital") {
-    digital.innerHTML = ex.questions.map((q, i) => `
-      <article class="exercise-question-card exercise-answer-card">
-        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
-        <p>${exerciseEscape(q.question)}</p>
-        <label class="exercise-answer-label" for="exercise-answer-${i}">Ta réponse</label>
-        <textarea id="exercise-answer-${i}" rows="5" placeholder="Rédige ta réponse ici…" oninput="saveExerciseAnswers()">${exerciseEscape(ex.answers?.[i] || "")}</textarea>
-      </article>`).join("");
-  } else {
-    document.getElementById("exercise-paper-question-sheet").innerHTML = ex.questions.map((q, i) => `
-      <article class="exercise-question-card">
-        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
-        <p>${exerciseEscape(q.question)}</p>
-      </article>`).join("");
-    document.getElementById("exercise-paper-transcript").value = ex.paperTranscript || "";
-    document.getElementById("exercise-paper-photo-status").textContent =
-      ex.paperImages?.length ? `${ex.paperImages.length} photo(s) conservée(s) pour l'export.` : "Aucune photo ajoutée.";
-  }
-}
-window.saveExerciseAnswers = () => {
-  const ex = exerciseGetActive();
-  if (!ex || ex.method !== "digital") return;
-  ex.answers = ex.answers || {};
-  ex.questions.forEach((q, i) => {
-    const field = document.getElementById(`exercise-answer-${i}`);
-    if (field) ex.answers[i] = field.value;
   });
-  exerciseSaveLibrary();
-};
-window.startExerciseAttempt = () => {
-  const ex = exerciseGetActive();
-  if (!ex) return;
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioContextClass && !window._exerciseAudioContext) {
-      window._exerciseAudioContext = new AudioContextClass();
-      window._exerciseAudioContext.resume?.();
-    }
-  } catch (_) {}
-  ex.startedAt = Date.now();
-  if (ex.timerEnabled) ex.timerExpiresAt = Date.now() + ex.durationMinutes * 60 * 1000;
-  exerciseSaveLibrary();
-  document.getElementById("exercise-preview-state").style.display = "none";
-  document.getElementById("exercise-active-state").style.display = "block";
-  renderExerciseAnswerFields();
-  startExerciseTimerDisplay();
-};
-function stopExerciseTimer() {
-  if (window._exerciseTimerInterval) clearInterval(window._exerciseTimerInterval);
-  window._exerciseTimerInterval = null;
-}
-function formatExerciseTime(seconds) {
-  const safe = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const secs = safe % 60;
-  return hours ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` :
-    `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-function ringExerciseTimer() {
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const context = window._exerciseAudioContext || new AudioContextClass();
-    context.resume?.();
-    [0, 0.35, 0.7].forEach(offset => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, context.currentTime + offset);
-      gain.gain.exponentialRampToValueAtTime(0.22, context.currentTime + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + offset + 0.22);
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(context.currentTime + offset);
-      oscillator.stop(context.currentTime + offset + 0.24);
+
+  if (allLiked.length > 0) {
+    const optGroup = document.createElement("optgroup");
+    optGroup.label = "❤️ Tes cours, fiches et quiz aimés";
+    allLiked.forEach(item => {
+      const opt = document.createElement("option");
+      opt.value = JSON.stringify({ title: item.title, subject: item.subject, summary: item.summary });
+      opt.textContent = `[${item.subject}] ${item.title} (par @${item.author})`;
+      optGroup.appendChild(opt);
     });
-  } catch (error) {
-    console.warn("Sonnerie non disponible :", error);
+    sel.appendChild(optGroup);
+  } else {
+    const opt = document.createElement("option");
+    opt.disabled = true;
+    opt.textContent = "(Aucun cours ou quiz aimé pour le moment)";
+    sel.appendChild(opt);
   }
 }
-function startExerciseTimerDisplay() {
-  const ex = exerciseGetActive();
-  const timer = document.getElementById("exercise-live-timer");
-  if (!ex?.timerEnabled || !ex.timerExpiresAt) {
-    timer.style.display = "none";
-    stopExerciseTimer();
-    return;
-  }
-  timer.style.display = "inline-flex";
-  stopExerciseTimer();
-  const tick = () => {
-    const remaining = Math.ceil((ex.timerExpiresAt - Date.now()) / 1000);
-    document.getElementById("exercise-timer-display").textContent = formatExerciseTime(remaining);
-    if (remaining <= 0 && !ex.timerExpired && !ex.completed) {
-      ex.timerExpired = true;
-      timer.classList.add("expired");
-      stopExerciseTimer();
-      exerciseSaveLibrary();
-      ringExerciseTimer();
-      showToast("Temps écoulé ! La copie est clôturée pour la correction.");
-      document.getElementById("exercise-time-notice").textContent = "Le temps imparti est écoulé. Ta copie est enregistrée.";
-      finishExerciseAttempt(true);
-    }
-  };
-  tick();
-  if (!ex.timerExpired && !ex.completed) window._exerciseTimerInterval = setInterval(tick, 1000);
-}
-window.handleExercisePaperPhotos = event => {
-  const files = Array.from(event.target.files || []);
-  if (files.length > EXERCISE_MAX_PHOTOS) {
-    event.target.value = "";
-    window._exercisePaperFiles = [];
-    return showToast(`Maximum ${EXERCISE_MAX_PHOTOS} photos autorisées.`);
-  }
-  if (files.some(file => !file.type.startsWith("image/") || file.size > 12 * 1024 * 1024)) {
-    event.target.value = "";
-    window._exercisePaperFiles = [];
-    return showToast("Choisis des images de moins de 12 Mo chacune.");
-  }
-  window._exercisePaperFiles = files;
-  document.getElementById("exercise-paper-photo-status").textContent =
-    files.length ? `${files.length} photo(s) sélectionnée(s) : ${files.map(file => file.name).join(", ")}` : "Aucune photo ajoutée.";
+
+// Subject Change
+window.handleExerciceSubjectChange = (e) => {
+  const isOther = e.target.value === "autre";
+  const wrap = document.getElementById("ex-create-subject-other-wrap");
+  if (wrap) wrap.style.display = isOther ? "block" : "none";
 };
-async function exerciseImageToJpegDataURL(file) {
-  const original = await new Promise((resolve, reject) => {
+
+// PDF Upload for Course context
+window.handleExercicePDFUpload = async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+
+  for (const f of files) {
+    if (!f.name.toLowerCase().endsWith(".pdf")) {
+      showToast("Seuls les fichiers PDF sont acceptés ici.");
+      continue;
+    }
+    if (f.size > 20 * 1024 * 1024) {
+      showToast(`Le fichier ${f.name} dépasse 20 Mo.`);
+      continue;
+    }
+
+    try {
+      const base64 = await readFileAsBase64(f);
+      window._exUploadedPDFs.push({
+        name: f.name,
+        size: (f.size / (1024 * 1024)).toFixed(2) + " Mo",
+        mimeType: "application/pdf",
+        base64: base64
+      });
+    } catch (err) {
+      showToast("Erreur de lecture de " + f.name);
+    }
+  }
+
+  e.target.value = "";
+  renderExercicePDFList();
+};
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Lecture de la photo impossible."));
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-  const img = await new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Image illisible."));
-    image.src = original;
-  });
-  const scale = Math.min(1, 1500 / Math.max(img.width, img.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(img.width * scale);
-  canvas.height = Math.round(img.height * scale);
-  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.72);
-}
-async function loadExerciseOCR() {
-  if (!window._exerciseOcrModulePromise) {
-    window._exerciseOcrModulePromise = import("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js");
-  }
-  return window._exerciseOcrModulePromise;
-}
-async function createExerciseOCRWorker(logger) {
-  const Tesseract = await loadExerciseOCR();
-  return Tesseract.createWorker("fra", 1, {
-    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
-    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5",
-    langPath: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0_best_int/",
-    logger: logger || (() => {})
-  });
-}
-window.recognizeExercisePaper = async () => {
-  const ex = exerciseGetActive();
-  const transcript = document.getElementById("exercise-paper-transcript");
-  const status = document.getElementById("exercise-paper-photo-status");
-  if (!ex || ex.method !== "paper") return;
-  const files = window._exercisePaperFiles || [];
-  if (!files.length && !transcript.value.trim()) {
-    return showToast("Ajoute au moins une photo ou saisis directement la transcription.");
-  }
-  if (!files.length) {
-    ex.paperTranscript = transcript.value.trim();
-    exerciseSaveLibrary();
-    return showToast("Transcription enregistrée.");
-  }
-  status.textContent = "Reconnaissance du texte en cours…";
-  try {
-    const worker = await createExerciseOCRWorker(message => {
-      if (message.status === "recognizing text") status.textContent = `Lecture des photos… ${Math.round((message.progress || 0) * 100)} %`;
-    });
-    const recognized = [];
-    const savedImages = [];
-    for (let i = 0; i < files.length; i++) {
-      status.textContent = `Lecture de la photo ${i + 1}/${files.length}…`;
-      const result = await worker.recognize(files[i]);
-      recognized.push(`--- Photo ${i + 1} ---\n${result.data.text || ""}`);
-      savedImages.push({ name: files[i].name, dataUrl: await exerciseImageToJpegDataURL(files[i]) });
-    }
-    await worker.terminate();
-    const existing = transcript.value.trim();
-    transcript.value = [existing, ...recognized].filter(Boolean).join("\n\n");
-    ex.paperImages = savedImages;
-    ex.paperTranscript = transcript.value.trim();
-    window._exercisePaperImages = savedImages;
-    await saveExercisePaperImages(ex.id, savedImages);
-    exerciseSaveLibrary();
-    status.textContent = `${files.length} photo(s) lue(s). Relis et corrige la transcription avant de terminer.`;
-    showToast("Reconnaissance terminée. Vérifie le texte obtenu.");
-  } catch (error) {
-    console.error("OCR des photos impossible :", error);
-    status.textContent = "Reconnaissance automatique indisponible. Tu peux saisir la transcription manuellement.";
-    showToast("La lecture automatique a échoué. Saisis ou colle tes réponses dans la zone de texte.");
-  }
-};
-window.finishExerciseAttempt = async (forcedByTimer = false) => {
-  const ex = exerciseGetActive();
-  if (!ex || ex.completed) return;
-  if (ex.method === "digital") {
-    saveExerciseAnswers();
-    const hasAnswer = Object.values(ex.answers || {}).some(value => String(value).trim());
-    if (!hasAnswer && !forcedByTimer) return showToast("Rédige au moins une réponse avant de terminer.");
-  } else {
-    const transcript = document.getElementById("exercise-paper-transcript").value.trim();
-    ex.paperTranscript = transcript;
-    if (!transcript && !forcedByTimer) return showToast("Ajoute les photos ou la transcription de ta copie avant de terminer.");
-    ex.paperImages = ex.paperImages || [];
-    if (window._exercisePaperFiles?.length && !ex.paperImages.length) {
-      try {
-        const savedImages = [];
-        for (const file of window._exercisePaperFiles) {
-          savedImages.push({ name: file.name, dataUrl: await exerciseImageToJpegDataURL(file) });
-        }
-        ex.paperImages = savedImages;
-        await saveExercisePaperImages(ex.id, savedImages);
-      } catch (error) {
-        console.warn("Conservation des photos de copie impossible :", error);
-      }
-    }
-  }
-  stopExerciseTimer();
-  ex.completed = true;
-  ex.submittedAt = Date.now();
-  ex.timerExpired = ex.timerExpired || !!forcedByTimer;
-  ex.selfRating = 3;
-  ex.selfComment = "";
-  exerciseSaveLibrary();
-  document.getElementById("exercise-active-state").style.display = "none";
-  document.getElementById("exercise-self-assess").style.display = "block";
-  document.getElementById("exercise-correction-result").style.display = "none";
-  document.getElementById("exercise-self-rating").value = "3";
-  document.getElementById("exercise-self-comment").value = "";
-  updateExerciseSelfRating();
-};
-window.updateExerciseSelfRating = () => {
-  const value = document.getElementById("exercise-self-rating").value;
-  document.getElementById("exercise-self-rating-value").textContent = `${value} / 5`;
-  const ex = exerciseGetActive();
-  if (ex) ex.selfRating = Number(value);
-};
-window.correctAIExercise = async () => {
-  const ex = exerciseGetActive();
-  if (!ex || !ex.completed) return;
-  const answers = ex.method === "digital" ? (ex.answers || {}) : { copie: ex.paperTranscript || "" };
-  const selfRating = Number(document.getElementById("exercise-self-rating").value || 3);
-  const selfComment = document.getElementById("exercise-self-comment").value.trim();
-  ex.selfRating = selfRating;
-  ex.selfComment = selfComment;
-  exerciseSaveLibrary();
-  const button = document.getElementById("exercise-correct-button");
-  const loading = document.getElementById("exercise-correction-loading");
-  button.disabled = true;
-  loading.style.display = "flex";
-  try {
-    const systemPrompt = `Tu es un professeur correcteur spécialisé dans la matière de l'exercice. Tu corriges avec neutralité, précision et une exigence soutenue, sans être injuste.
-Tu dois t'appuyer en priorité sur le contexte original fourni lors de la création, les attentes de réponse et le barème de chaque question.
-La note finale doit être sur 20 et refléter strictement la qualité réelle des réponses. N'accorde pas des points pour une notion simplement citée sans explication quand le raisonnement est demandé. Accorde les points partiels aux démarches pertinentes, même si le résultat final est faux. Ne retire pas deux fois les points pour la même erreur.
-En cas de transcription OCR incertaine, signale cette incertitude et ne sanctionne pas un passage illisible sans le préciser.
-L'auto-évaluation de l'élève est informative seulement et ne doit jamais augmenter ou diminuer la note.
-Retourne uniquement un JSON valide selon ce schéma :
-{
- "score": 0,
- "generalFeedback": "Appréciation détaillée et honnête",
- "strengths": ["Point réussi"],
- "improvements": ["Point à retravailler"],
- "questions": [
-  {"index":1,"pointsAwarded":0,"maxPoints":2,"comment":"Correction détaillée, erreurs et raisonnement attendu","expectedAnswer":"Réponse attendue concise"}
- ]
-}
-Vérifie que la somme des points attribués est cohérente avec la note finale sur 20.`;
-    const questionPayload = ex.questions.map((q, i) => ({
-      index: i + 1, question: q.question, maxPoints: q.points,
-      rubric: q.rubric, expectedAnswer: q.expectedAnswer,
-      studentAnswer: ex.method === "digital" ? (answers[i] || "") : (ex.paperTranscript || "")
-    }));
-    const userPrompt = `CORRECTION D'UNE COPIE
-Matière : ${ex.subject}
-Chapitre : ${ex.topic}
-Consignes initiales : ${ex.details || "Aucune précision supplémentaire."}
-Sujet et barème d'origine : ${JSON.stringify(ex.questions)}
-Contexte original fourni à la génération :
-${(ex.sourceContext || "Aucun document de référence joint.").slice(0, 20000)}
-Mode de réponse : ${ex.method === "paper" ? "copie papier transcrite par reconnaissance de texte" : "réponses saisies au clavier"}
-Copie de l'élève :
-${JSON.stringify(questionPayload)}
-Auto-évaluation de l'élève : ${selfRating}/5. Commentaire : ${selfComment || "Aucun"}.
-Temps écoulé : ${ex.timerExpired ? "Oui, le chronomètre est arrivé à zéro." : "Non / non chronométré."}
-Attribue une correction détaillée à chaque question, puis une note réelle sur 20. Ne te montre ni complaisant ni punitif.`;
-    const correction = await callExerciseAI(systemPrompt, userPrompt, 6500);
-    const score = Math.max(0, Math.min(20, Number(correction.score) || 0));
-    ex.correction = {
-      score: Math.round(score * 10) / 10,
-      generalFeedback: String(correction.generalFeedback || "Correction terminée."),
-      strengths: Array.isArray(correction.strengths) ? correction.strengths.map(String) : [],
-      improvements: Array.isArray(correction.improvements) ? correction.improvements.map(String) : [],
-      questions: Array.isArray(correction.questions) ? correction.questions : [],
-      correctedAt: Date.now()
-    };
-    exerciseSaveLibrary();
-    document.getElementById("exercise-self-assess").style.display = "none";
-    document.getElementById("exercise-correction-result").style.display = "block";
-    renderExerciseCorrection();
-    showToast("Correction terminée.");
-  } catch (error) {
-    console.error("Correction IA impossible :", error);
-    showToast(error.message || "La correction n'a pas pu aboutir. Tu peux réessayer.");
-  } finally {
-    button.disabled = false;
-    loading.style.display = "none";
-  }
-};
-function renderExerciseCorrection() {
-  const ex = exerciseGetActive();
-  if (!ex?.correction) return;
-  const correction = ex.correction;
-  document.getElementById("exercise-result-score-value").textContent =
-    `${Number(correction.score).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} / 20`;
-  document.getElementById("exercise-result-score-label").textContent =
-    correction.score >= 16 ? "Très bonne maîtrise" : correction.score >= 12 ? "Ensemble satisfaisant" : correction.score >= 10 ? "En cours d'acquisition" : "Des notions sont à retravailler";
-  document.getElementById("exercise-result-general").textContent = correction.generalFeedback;
-  const lists = `
-    <div><h3>Points réussis</h3><ul>${(correction.strengths || []).map(item => `<li>${exerciseEscape(item)}</li>`).join("") || "<li>Aucun point renseigné.</li>"}</ul></div>
-    <div><h3>À améliorer</h3><ul>${(correction.improvements || []).map(item => `<li>${exerciseEscape(item)}</li>`).join("") || "<li>Aucun point renseigné.</li>"}</ul></div>`;
-  document.getElementById("exercise-result-strengths").innerHTML = lists;
-  document.getElementById("exercise-result-questions").innerHTML = ex.questions.map((q, i) => {
-    const result = correction.questions?.find(item => Number(item.index) === i + 1) || correction.questions?.[i] || {};
-    const answer = ex.method === "digital" ? (ex.answers?.[i] || "") : (i === 0 ? (ex.paperTranscript || "") : "Transcription complète présentée sous la première question.");
-    return `
-      <article class="exercise-correction-card">
-        <div class="exercise-question-card-head"><strong>Question ${i + 1}</strong><span>${Number(result.pointsAwarded) || 0} / ${q.points} pt${q.points > 1 ? "s" : ""}</span></div>
-        <p class="exercise-correction-question">${exerciseEscape(q.question)}</p>
-        <div class="exercise-answer-review"><strong>Ta réponse</strong><p>${exerciseEscape(answer || "Aucune réponse fournie.")}</p></div>
-        <div class="exercise-teacher-feedback"><strong>Appréciation du professeur</strong><p>${exerciseEscape(result.comment || "Aucune remarque détaillée fournie.")}</p></div>
-        ${result.expectedAnswer ? `<div class="exercise-expected-answer"><strong>Réponse / raisonnement attendu</strong><p>${exerciseEscape(result.expectedAnswer)}</p></div>` : ""}
-      </article>`;
-  }).join("");
 }
 
-window.exportExercisePDF = withCorrection => {
-  const ex = exerciseGetActive();
-  if (!ex) return showToast("Aucun exercice à exporter.");
-  if (!window.jspdf?.jsPDF) return showToast("Le module d'export PDF n'est pas disponible.");
-  if (withCorrection && !ex.correction) return showToast("La correction IA n'est pas encore disponible.");
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  let y = 18;
-  const pageHeight = 282;
-  const margin = 14;
-  const write = (text, color = [30, 30, 35], size = 10, bold = false) => {
-    pdf.setFont("helvetica", bold ? "bold" : "normal");
-    pdf.setFontSize(size);
-    pdf.setTextColor(...color);
-    const lines = pdf.splitTextToSize(String(text ?? ""), 180);
-    const lineHeight = size * 0.48;
-    if (y + lines.length * lineHeight > pageHeight) { pdf.addPage(); y = 18; }
-    pdf.text(lines, margin, y);
-    y += lines.length * lineHeight + 3;
-  };
-  const blue = [40, 85, 170];
-  const purple = [125, 65, 165];
-  const green = [35, 125, 75];
-  const red = [175, 55, 55];
-  write(ex.title || `Exercice — ${ex.topic}`, [25, 25, 35], 18, true);
-  write(`${ex.subject} · ${ex.topic}`, [95, 95, 105], 10);
-  write(`Créé le ${new Date(ex.createdAt).toLocaleDateString("fr-FR")} · Barème total : 20 points${ex.durationMinutes ? ` · Durée : ${ex.durationMinutes} min` : ""}`, [95, 95, 105], 9);
-  if (ex.instructions) write(ex.instructions, [50, 50, 60], 10);
-  if (ex.method === "paper" && ex.paperTranscript) {
-    write("TRANSCRIPTION DE LA COPIE PAPIER", purple, 10, true);
-    write(ex.paperTranscript, purple, 10);
+function renderExercicePDFList() {
+  const listDiv = document.getElementById("ex-pdf-list");
+  if (!listDiv) return;
+
+  if (window._exUploadedPDFs.length === 0) {
+    listDiv.innerHTML = "";
+    return;
   }
-  ex.questions.forEach((q, i) => {
-    write(`QUESTION ${i + 1} · ${q.points} point${q.points > 1 ? "s" : ""}`, blue, 11, true);
-    write(q.question, blue, 10, false);
-    const answer = ex.method === "digital" ? (ex.answers?.[i] || "") : (ex.paperTranscript || "Voir la copie papier originale jointe en fin de sujet.");
-    write("RÉPONSE DE L'ÉLÈVE", purple, 9, true);
-    write(answer || "[Non renseignée]", purple, 10);
-    if (withCorrection && ex.correction && ex.method === "digital") {
-      const result = ex.correction.questions?.find(item => Number(item.index) === i + 1) || ex.correction.questions?.[i] || {};
-      write(`NOTE : ${Number(result.pointsAwarded) || 0} / ${q.points}`, green, 10, true);
-      write(result.comment || "Aucune remarque détaillée.", green, 10);
-      if (result.expectedAnswer) {
-        write("RÉPONSE ATTENDUE", red, 9, true);
-        write(result.expectedAnswer, red, 10);
+
+  listDiv.innerHTML = window._exUploadedPDFs.map((pdf, idx) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--card-bg); border:1px solid var(--hl); padding:8px 12px; border-radius:10px; font-size:13px;">
+      <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+        <span style="font-size:16px;">📄</span>
+        <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(pdf.name)}</span>
+        <span class="caption">(${pdf.size})</span>
+      </div>
+      <button class="btn-ghost btn-sm del" style="padding:2px 8px; font-size:11px;" onclick="removeExercicePDF(${idx})">✕</button>
+    </div>
+  `).join("");
+}
+
+window.removeExercicePDF = (idx) => {
+  window._exUploadedPDFs.splice(idx, 1);
+  renderExercicePDFList();
+};
+
+// Timer selection
+window.setExerciceDuration = (minutes) => {
+  minutes = Math.min(240, Math.max(5, Number(minutes) || 60));
+  window._exDuration = minutes;
+
+  document.querySelectorAll(".ex-timer-btn").forEach(btn => {
+    const bMin = Number(btn.dataset.min);
+    btn.classList.toggle("active", bMin === minutes);
+  });
+
+  const customInput = document.getElementById("ex-custom-duration");
+  if (customInput) customInput.value = minutes;
+};
+
+window.handleCustomDurationInput = (e) => {
+  const val = Number(e.target.value);
+  if (val > 240) {
+    e.target.value = 240;
+    showToast("Le chronomètre est limité à 4 heures maximum (240 min).");
+  }
+  setExerciceDuration(e.target.value);
+};
+
+window.toggleExerciceTimerFields = (e) => {
+  const enabled = e.target.checked;
+  window._exTimerActive = enabled;
+  const cfg = document.getElementById("ex-timer-config");
+  if (cfg) cfg.style.display = enabled ? "flex" : "none";
+};
+
+// Mode selection
+window.selectExerciceMode = (mode) => {
+  window._exMode = mode;
+  const cardClavier = document.getElementById("ex-mode-card-clavier");
+  const cardPapier = document.getElementById("ex-mode-card-papier");
+  if (cardClavier) cardClavier.classList.toggle("active", mode === "clavier");
+  if (cardPapier) cardPapier.classList.toggle("active", mode === "papier");
+};
+
+// Generate Exercise with AI
+window.handleGenerateAIExercice = async () => {
+  const subjSelect = document.getElementById("ex-create-subject");
+  let subject = subjSelect ? subjSelect.value : "Mathématiques";
+  if (subject === "autre") {
+    const otherVal = document.getElementById("ex-create-subject-other")?.value.trim();
+    if (!otherVal) {
+      showToast("Veuillez préciser le nom de votre matière personnalisée.");
+      return;
+    }
+    subject = otherVal;
+  }
+
+  const topic = document.getElementById("ex-create-topic")?.value.trim();
+  if (!topic) {
+    showToast("Veuillez renseigner le chapitre ou thème de l'exercice.");
+    return;
+  }
+
+  const level = document.getElementById("ex-create-level")?.value || "Contrôle continu standard";
+  const details = document.getElementById("ex-create-details")?.value.trim() || "";
+  const linkedItemRaw = document.getElementById("ex-create-linked-item")?.value || "";
+  let linkedContext = "";
+  if (linkedItemRaw) {
+    try {
+      const parsed = JSON.parse(linkedItemRaw);
+      linkedContext = `Titre du document aimé : ${parsed.title} (${parsed.subject})\nRésumé : ${parsed.summary}`;
+    } catch (_) {}
+  }
+
+  const durationMinutes = window._exTimerActive ? window._exDuration : 0;
+  const mode = window._exMode;
+
+  const loadingDiv = document.getElementById("ex-create-loading");
+  const actionsDiv = document.getElementById("ex-create-actions");
+  if (loadingDiv) loadingDiv.style.display = "block";
+  if (actionsDiv) actionsDiv.style.display = "none";
+
+  try {
+    const response = await fetch("/api/gemini/generate-exercise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject,
+        topic,
+        level,
+        details,
+        linkedContext,
+        durationMinutes,
+        mode,
+        pdfFiles: window._exUploadedPDFs
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "Erreur de génération.");
+    }
+
+    const data = await response.json();
+    data.id = "ex_" + Date.now();
+    data.createdAt = Date.now();
+    data.author = currentUser ? currentUser.username : "Élève";
+    data.mode = mode;
+    data.durationMinutes = durationMinutes;
+
+    saveExerciceToHistory(data);
+    closeModal("m-create-exercice");
+    showToast("Exercice d'entraînement prêt ✓");
+    
+    // Launch the exercise session
+    window.startExerciceSession(data);
+  } catch (err) {
+    console.error("Erreur génération exercice :", err);
+    showToast("Erreur lors de la génération de l'exercice : " + err.message);
+  } finally {
+    if (loadingDiv) loadingDiv.style.display = "none";
+    if (actionsDiv) actionsDiv.style.display = "flex";
+  }
+};
+
+// Start exercise session
+window.startExerciceSession = (exercice) => {
+  window._currentExercice = exercice;
+  window._currentExerciceAnswers = [];
+  window._exPaperPhotos = [];
+
+  // Populate header
+  document.getElementById("ex-take-title").innerText = exercice.title || "Entraînement";
+  document.getElementById("ex-take-subject-badge").innerText = exercice.subject;
+  document.getElementById("ex-take-level-badge").innerText = exercice.level || "Standard";
+  
+  const modeBadge = document.getElementById("ex-take-mode-badge");
+  if (modeBadge) {
+    modeBadge.innerText = exercice.mode === "papier" ? "📝 Copie Papier" : "💻 Clavier Numérique";
+    modeBadge.style.background = exercice.mode === "papier" ? "rgba(255,149,0,.14)" : "rgba(52,199,89,.12)";
+    modeBadge.style.color = exercice.mode === "papier" ? "#b25e00" : "#248a3d";
+  }
+
+  document.getElementById("ex-take-instructions").innerText = exercice.instructions || "Répondez aux questions avec clarté et précision méthodologique.";
+
+  // Render questions
+  const container = document.getElementById("ex-take-content");
+  container.innerHTML = "";
+
+  if (exercice.mode === "papier") {
+    // Instruction banner for paper mode
+    const paperBanner = document.createElement("div");
+    paperBanner.style.cssText = "background:rgba(88,86,214,.08); border:1px solid rgba(88,86,214,.25); border-radius:16px; padding:18px; margin-bottom:12px;";
+    paperBanner.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:24px;">📝</span>
+        <h3 style="margin:0; font-size:16px; color:#5856d6;">Mode Rédaction Manuscrite sur Feuille Papier</h3>
+      </div>
+      <p class="caption" style="margin:0 0 12px 0; line-height:1.5;">
+        Munissez-vous de vos feuilles de brouillon ou copies et de vos stylos. Traitez les questions ci-dessous en numérotant bien chaque réponse. Une fois terminé, prenez votre travail en photo et téléversez les pages ci-dessous pour la correction de l'IA.
+      </p>
+      <div class="ex-photo-upload-area" onclick="document.getElementById('ex-paper-photo-input').click()">
+        <input type="file" id="ex-paper-photo-input" accept="image/*" multiple capture="environment" style="display:none;" onchange="handleExercicePaperPhotos(event)">
+        <div style="font-size:28px; margin-bottom:6px;">📸</div>
+        <div style="font-weight:700; font-size:14px; color:var(--ink);">Ajouter / Prendre en photo ma copie manuscrite</div>
+        <div class="caption">Compatible smartphone &amp; ordinateur (JPG, PNG, WEBP - plusieurs pages possibles)</div>
+      </div>
+      <div class="ex-photo-preview-grid" id="ex-photo-preview-grid"></div>
+    `;
+    container.appendChild(paperBanner);
+  }
+
+  // Render question cards
+  (exercice.questions || []).forEach((q, idx) => {
+    const qBox = document.createElement("div");
+    qBox.className = "ex-question-box";
+    qBox.id = `ex-q-box-${q.id || idx}`;
+
+    const hintHtml = q.hint ? `
+      <div style="margin-top:10px;">
+        <button type="button" class="btn-ghost btn-sm" style="font-size:12px; padding:3px 10px;" onclick="toggleExerciceHint(${idx})">💡 Voir l'indice</button>
+        <div class="ex-hint-content" id="ex-hint-${idx}" style="display:none;">${esc(q.hint)}</div>
+      </div>
+    ` : "";
+
+    const answerArea = exercice.mode === "clavier" ? `
+      <div style="margin-top:14px;">
+        <label style="font-size:13px; font-weight:700; color:var(--ink); margin-bottom:6px; display:block;">Ta réponse rédigée :</label>
+        <textarea class="ex-q-textarea" id="ex-answer-q-${q.id || idx}" data-qid="${q.id || idx}" placeholder="Rédige ta réponse complète avec démarches et justifications..." oninput="handleAnswerInput(${q.id || idx})"></textarea>
+      </div>
+    ` : `
+      <div style="margin-top:10px; font-size:12px; color:var(--ink-m); font-style:italic;">
+        ✍️ À rédiger sur votre copie papier (n°${q.questionNumber || idx + 1}).
+      </div>
+    `;
+
+    qBox.innerHTML = `
+      <div class="ex-q-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-weight:800; font-size:16px; color:var(--primary);">Question ${q.questionNumber || idx + 1}</span>
+          ${q.title ? `<span style="font-size:14px; font-weight:600; color:var(--ink);">${esc(q.title)}</span>` : ""}
+        </div>
+        <span class="ex-q-points">${q.points || 0} pt${(q.points || 0) > 1 ? "s" : ""}</span>
+      </div>
+      <div style="font-size:15px; line-height:1.6; color:var(--ink); white-space:pre-wrap;">${esc(q.text)}</div>
+      ${hintHtml}
+      ${answerArea}
+    `;
+
+    container.appendChild(qBox);
+  });
+
+  // Start timer if applicable
+  initExerciceTimer(exercice.durationMinutes);
+
+  openModal("m-take-exercice");
+};
+
+window.toggleExerciceHint = (idx) => {
+  const el = document.getElementById(`ex-hint-${idx}`);
+  if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+};
+
+window.handleAnswerInput = (qid) => {
+  const ta = document.getElementById(`ex-answer-q-${qid}`);
+  if (!ta) return;
+  const existing = window._currentExerciceAnswers.find(a => a.questionId === qid);
+  if (existing) {
+    existing.answerText = ta.value;
+  } else {
+    window._currentExerciceAnswers.push({ questionId: qid, answerText: ta.value });
+  }
+};
+
+// Timer Logic
+function initExerciceTimer(minutes) {
+  if (window._exTimerInterval) {
+    clearInterval(window._exTimerInterval);
+    window._exTimerInterval = null;
+  }
+
+  const timerBar = document.getElementById("ex-take-timer-bar");
+  const alertEl = document.getElementById("ex-timer-alert");
+  if (alertEl) alertEl.style.display = "none";
+
+  if (!minutes || minutes <= 0) {
+    if (timerBar) timerBar.style.display = "none";
+    return;
+  }
+
+  if (timerBar) timerBar.style.display = "block";
+  window._exTotalSeconds = minutes * 60;
+  window._exRemainingSeconds = minutes * 60;
+  window._exTimerPaused = false;
+
+  updateTimerDisplay();
+
+  window._exTimerInterval = setInterval(() => {
+    if (window._exTimerPaused) return;
+
+    window._exRemainingSeconds--;
+    updateTimerDisplay();
+
+    if (window._exRemainingSeconds <= 0) {
+      clearInterval(window._exTimerInterval);
+      window._exTimerInterval = null;
+      window._exRemainingSeconds = 0;
+      updateTimerDisplay();
+
+      // Ring chime sound
+      playExamBellChime();
+
+      if (alertEl) alertEl.style.display = "block";
+      showToast("⏰ Le temps imparti de l'exercice est écoulé !");
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const display = document.getElementById("ex-timer-display");
+  const fill = document.getElementById("ex-timer-progress-fill");
+  if (!display || !fill) return;
+
+  const s = Math.max(0, window._exRemainingSeconds);
+  const hours = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+
+  display.innerText = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+
+  const pct = window._exTotalSeconds > 0 ? (s / window._exTotalSeconds) * 100 : 0;
+  fill.style.width = `${pct}%`;
+
+  if (s <= 300) {
+    fill.classList.add("warning");
+    display.style.color = "var(--danger)";
+  } else {
+    fill.classList.remove("warning");
+    display.style.color = "var(--primary)";
+  }
+}
+
+window.toggleExerciceTimerPause = () => {
+  window._exTimerPaused = !window._exTimerPaused;
+  const btn = document.getElementById("btn-timer-pause");
+  const status = document.getElementById("ex-timer-status");
+  if (btn) btn.innerText = window._exTimerPaused ? "▶️ Reprendre" : "⏸️ Pause";
+  if (status) status.innerText = window._exTimerPaused ? "En pause" : "Chronomètre actif";
+};
+
+// Paper Mode Photos
+window.handleExercicePaperPhotos = async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) {
+      showToast("Seules les photos sont autorisées.");
+      continue;
+    }
+    try {
+      const base64 = await readFileAsBase64(f);
+      window._exPaperPhotos.push({
+        name: f.name,
+        mimeType: f.type || "image/jpeg",
+        base64: base64
+      });
+    } catch (_) {
+      showToast("Erreur de chargement d'une photo.");
+    }
+  }
+
+  e.target.value = "";
+  renderPaperPhotosGrid();
+  showToast(`${window._exPaperPhotos.length} photo(s) de copie enregistrée(s) ✓`);
+};
+
+function renderPaperPhotosGrid() {
+  const grid = document.getElementById("ex-photo-preview-grid");
+  if (!grid) return;
+
+  grid.innerHTML = window._exPaperPhotos.map((p, idx) => `
+    <div class="ex-photo-thumb-card">
+      <img src="${p.base64}" alt="Page ${idx + 1}">
+      <button type="button" class="ex-photo-thumb-del" onclick="removeExercicePhoto(${idx})">✕</button>
+      <div style="position:absolute; bottom:4px; left:4px; font-size:10px; background:rgba(0,0,0,0.7); color:#fff; padding:2px 6px; border-radius:4px;">Page ${idx + 1}</div>
+    </div>
+  `).join("");
+}
+
+window.removeExercicePhoto = (idx) => {
+  window._exPaperPhotos.splice(idx, 1);
+  renderPaperPhotosGrid();
+};
+
+window.confirmExitExercice = () => {
+  if (confirm("Voulez-vous vraiment quitter cette session d'exercice ? Vos réponses actuelles sont conservées localement.")) {
+    if (window._exTimerInterval) {
+      clearInterval(window._exTimerInterval);
+      window._exTimerInterval = null;
+    }
+    closeModal("m-take-exercice");
+  }
+};
+
+// Self-Evaluation Modal
+window.openSelfEvaluationModal = () => {
+  if (!window._currentExercice) return;
+
+  // Verify answers provided
+  if (window._currentExercice.mode === "papier") {
+    if (window._exPaperPhotos.length === 0) {
+      if (!confirm("Vous n'avez pas encore téléversé de photo de votre copie papier. Voulez-vous quand même continuer pour la correction ?")) {
+        return;
       }
     }
-    y += 2;
-  });
-  if (withCorrection && ex.correction && ex.method === "digital") {
-    if (y > 245) { pdf.addPage(); y = 18; }
-    write(`NOTE FINALE : ${Number(ex.correction.score).toLocaleString("fr-FR")} / 20`, green, 15, true);
-    write(ex.correction.generalFeedback, [45, 45, 50], 10);
-    if (ex.correction.strengths?.length) write(`Points réussis : ${ex.correction.strengths.join(" ; ")}`, green, 9);
-    if (ex.correction.improvements?.length) write(`À retravailler : ${ex.correction.improvements.join(" ; ")}`, red, 9);
-  }
-  if (ex.method === "paper" && ex.paperImages?.length) {
-    pdf.addPage();
-    y = 18;
-    write("PHOTOGRAPHIES DE LA COPIE ORIGINALE", [35, 35, 45], 14, true);
-    ex.paperImages.forEach(image => {
-      try {
-        const props = pdf.getImageProperties(image.dataUrl);
-        const maxW = 180;
-        const maxH = 245;
-        const scale = Math.min(maxW / props.width, maxH / props.height);
-        const w = props.width * scale;
-        const h = props.height * scale;
-        if (y + h > pageHeight) { pdf.addPage(); y = 18; }
-        pdf.addImage(image.dataUrl, "JPEG", margin, y, w, h);
-        y += h + 8;
-      } catch (error) { console.warn("Photo ignorée lors de l'export :", error); }
-    });
-  }
-  if (withCorrection && ex.correction && ex.method === "paper") {
-    pdf.addPage();
-    y = 18;
-    write("CORRECTION DÉTAILLÉE DU PROFESSEUR", green, 14, true);
-    write("La copie originale est jointe dans les pages précédentes. Les annotations ci-dessous se rapportent aux questions correspondantes.", [75, 75, 85], 9);
-    ex.questions.forEach((q, i) => {
-      const result = ex.correction.questions?.find(item => Number(item.index) === i + 1) || ex.correction.questions?.[i] || {};
-      write(`QUESTION ${i + 1} · NOTE : ${Number(result.pointsAwarded) || 0} / ${q.points}`, green, 11, true);
-      write(result.comment || "Aucune remarque détaillée.", [45, 45, 50], 10);
-      if (result.expectedAnswer) {
-        write("RÉPONSE ATTENDUE", red, 9, true);
-        write(result.expectedAnswer, red, 10);
+  } else {
+    // Collect textarea answers
+    window._currentExerciceAnswers = [];
+    (window._currentExercice.questions || []).forEach(q => {
+      const ta = document.getElementById(`ex-answer-q-${q.id}`);
+      if (ta) {
+        window._currentExerciceAnswers.push({
+          questionId: q.id,
+          answerText: ta.value.trim()
+        });
       }
     });
-    if (y > 245) { pdf.addPage(); y = 18; }
-    write(`NOTE FINALE : ${Number(ex.correction.score).toLocaleString("fr-FR")} / 20`, green, 15, true);
-    write(ex.correction.generalFeedback, [45, 45, 50], 10);
-    if (ex.correction.strengths?.length) write(`Points réussis : ${ex.correction.strengths.join(" ; ")}`, green, 9);
-    if (ex.correction.improvements?.length) write(`À retravailler : ${ex.correction.improvements.join(" ; ")}`, red, 9);
+
+    const hasAnyAnswer = window._currentExerciceAnswers.some(a => a.answerText.length > 0);
+    if (!hasAnyAnswer) {
+      if (!confirm("Vous n'avez saisi aucune réponse aux questions. Voulez-vous quand même lancer la correction du professeur ?")) {
+        return;
+      }
+    }
   }
-  const suffix = withCorrection ? "corrige" : "non-corrige";
-  pdf.save(`dnb-exercice-${String(ex.topic || "sujet").toLowerCase().replace(/[^a-z0-9]+/gi, "-")}-${suffix}.pdf`);
+
+  // Reset self evaluation defaults
+  setSelfEvalStars(4);
+  const rangeInput = document.getElementById("self-eval-score-range");
+  if (rangeInput) rangeInput.value = 14;
+  handleSelfEvalScoreChange({ target: { value: 14 } });
+  const refText = document.getElementById("self-eval-reflections");
+  if (refText) refText.value = "";
+
+  openModal("m-self-evaluation");
 };
+
+window.setSelfEvalStars = (val) => {
+  window._currentSelfEval.confidenceStars = Number(val);
+  const stars = document.querySelectorAll("#self-eval-stars .ex-star");
+  stars.forEach(st => {
+    const sVal = Number(st.dataset.val);
+    st.classList.toggle("active", sVal <= val);
+  });
+
+  const textEl = document.getElementById("self-eval-confidence-text");
+  const labels = [
+    "",
+    "Très peu confiant (1/5) — Gros doutes sur l'épreuve",
+    "Peu confiant (2/5) — Plusieurs blocages",
+    "Moyennement confiant (3/5) — Travail correct mais hésitant",
+    "Assez confiant (4/5) — Bon ressenti général",
+    "Très confiant (5/5) — Démarche maîtrisée et complète"
+  ];
+  if (textEl) textEl.innerText = labels[val] || `${val}/5`;
+};
+
+window.handleSelfEvalScoreChange = (e) => {
+  const score = Number(e.target.value);
+  window._currentSelfEval.estimatedScore = score;
+  const disp = document.getElementById("self-eval-score-display");
+  if (disp) disp.innerText = `${score} / 20`;
+};
+
+// Submit for AI Grading
+window.submitExerciceForGrading = async () => {
+  if (!window._currentExercice) return;
+
+  const reflections = document.getElementById("self-eval-reflections")?.value.trim() || "";
+  window._currentSelfEval.reflections = reflections;
+
+  const loadingDiv = document.getElementById("ex-grade-loading");
+  const actionsDiv = document.getElementById("self-eval-actions");
+  if (loadingDiv) loadingDiv.style.display = "block";
+  if (actionsDiv) actionsDiv.style.display = "none";
+
+  try {
+    const payload = {
+      exercise: window._currentExercice,
+      mode: window._currentExercice.mode,
+      textAnswers: window._currentExerciceAnswers,
+      paperPhotos: window._exPaperPhotos,
+      selfAssessment: window._currentSelfEval
+    };
+
+    const response = await fetch("/api/gemini/grade-exercise", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "Erreur lors de la correction.");
+    }
+
+    const gradingResult = await response.json();
+
+    // Attach results to exercise
+    window._currentExercice.result = gradingResult;
+    window._currentExercice.studentAnswers = window._currentExerciceAnswers;
+    window._currentExercice.paperPhotosCount = window._exPaperPhotos.length;
+    window._currentExercice.selfAssessment = window._currentSelfEval;
+    window._currentExercice.gradedAt = Date.now();
+
+    saveExerciceToHistory(window._currentExercice);
+
+    // Stop timer
+    if (window._exTimerInterval) {
+      clearInterval(window._exTimerInterval);
+      window._exTimerInterval = null;
+    }
+
+    closeModal("m-self-evaluation");
+    closeModal("m-take-exercice");
+
+    // Display result modal
+    displayExerciceResults(window._currentExercice);
+    loadExercicesFeed();
+    showToast("Copie corrigée par le professeur IA ✓");
+  } catch (err) {
+    console.error("Erreur grading :", err);
+    showToast("Erreur lors de la correction : " + err.message);
+  } finally {
+    if (loadingDiv) loadingDiv.style.display = "none";
+    if (actionsDiv) actionsDiv.style.display = "flex";
+  }
+};
+
+function displayExerciceResults(ex) {
+  const res = ex.result;
+  if (!res) return;
+
+  document.getElementById("ex-result-title").innerText = ex.title;
+  document.getElementById("ex-result-meta").innerText = `${ex.subject} · ${ex.level || "Standard"} · ${new Date(ex.gradedAt || Date.now()).toLocaleDateString("fr-FR")}`;
+
+  // Big score & mention
+  const scoreEl = document.getElementById("ex-result-score");
+  if (scoreEl) scoreEl.innerHTML = `${res.totalScore}<span style="font-size:24px; color:var(--ink-m);">/20</span>`;
+  
+  const mentionEl = document.getElementById("ex-result-mention");
+  if (mentionEl) mentionEl.innerText = res.mention || (res.totalScore >= 16 ? "Très bien" : res.totalScore >= 14 ? "Bien" : res.totalScore >= 12 ? "Assez bien" : res.totalScore >= 10 ? "Passable" : "Insuffisant");
+
+  // Comparison with self-evaluation
+  const selfScoreEl = document.getElementById("ex-result-self-score");
+  const gapEl = document.getElementById("ex-result-gap");
+  const selfCommentEl = document.getElementById("ex-result-self-comment");
+
+  const selfScore = ex.selfAssessment?.estimatedScore ?? res.totalScore;
+  const gap = Number((res.totalScore - selfScore).toFixed(1));
+  if (selfScoreEl) selfScoreEl.innerText = `${selfScore}/20`;
+  if (gapEl) {
+    gapEl.innerText = `${gap > 0 ? "+" : ""}${gap} pt${Math.abs(gap) > 1 ? "s" : ""}`;
+    gapEl.style.color = gap >= 0 ? "#248a3d" : "#c93400";
+  }
+  if (selfCommentEl) {
+    selfCommentEl.innerText = res.selfAssessmentCritique || (gap > 0 ? "Tu as fait preuve d'une modestie appréciable, ton travail est meilleur que prévu !" : gap < 0 ? "Attention à ne pas sous-estimer la sévérité du barème officiel et l'exigence de rédaction." : "Estimation parfaite de ta copie !");
+  }
+
+  // Professor Appreciation
+  const appEl = document.getElementById("ex-result-appreciation");
+  if (appEl) appEl.innerText = `« ${res.generalAppreciation || "Copie corrigée avec rigueur."} »`;
+
+  // Strengths & Improvements
+  const strList = document.getElementById("ex-result-strengths");
+  if (strList) {
+    strList.innerHTML = (res.strengths || ["Rigueur des démarches", "Bonne compréhension globale"]).map(s => `<li>${esc(s)}</li>`).join("");
+  }
+  const impList = document.getElementById("ex-result-improvements");
+  if (impList) {
+    impList.innerHTML = (res.improvements || ["Préciser les unités et justifications", "Approfondir la conclusion"]).map(s => `<li>${esc(s)}</li>`).join("");
+  }
+
+  // Detailed Questions corrections
+  const qContainer = document.getElementById("ex-result-questions-container");
+  if (qContainer) {
+    qContainer.innerHTML = (ex.questions || []).map((q, idx) => {
+      const qEval = (res.questionEvaluations || []).find(e => e.questionId === q.id) || res.questionEvaluations?.[idx] || {
+        pointsAwarded: q.points || 0,
+        maxPoints: q.points || 0,
+        status: "correct",
+        feedback: "Bonne réponse.",
+        idealSolution: q.rubric || "Réponse attendue."
+      };
+
+      const ptsAwarded = qEval.pointsAwarded ?? 0;
+      const maxPts = qEval.maxPoints ?? q.points ?? 0;
+      const statusClass = qEval.status === "correct" || ptsAwarded === maxPts ? "correct" : ptsAwarded > 0 ? "partial" : "incorrect";
+      const statusBadgeText = statusClass === "correct" ? "✓ Validé" : statusClass === "partial" ? "⚠ Partiel" : "✕ Erreur";
+
+      const studentAnsObj = (ex.studentAnswers || []).find(a => a.questionId === q.id);
+      const studentAnsText = studentAnsObj ? studentAnsObj.answerText : (ex.mode === "papier" ? `[Réponse sur copie papier téléversée - ${ex.paperPhotosCount || 1} photo(s)]` : "Pas de réponse fournie");
+
+      return `
+        <div class="ex-res-q-box ${statusClass}">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700; font-size:15px; color:var(--ink);">
+              Question ${q.questionNumber || idx + 1} ${q.title ? `— ${esc(q.title)}` : ""}
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="type-tag" style="font-weight:700;">${ptsAwarded} / ${maxPts} pts</span>
+              <span class="ex-badge-soft" style="font-size:11px;">${statusBadgeText}</span>
+            </div>
+          </div>
+
+          <div style="font-size:14px; color:var(--ink-m); margin-bottom:12px; line-height:1.5;">
+            <strong>Énoncé :</strong> ${esc(q.text)}
+          </div>
+
+          <!-- Student's answer -->
+          <div style="background:var(--file-bg); border-left:3px solid var(--primary); padding:10px 14px; border-radius:0 8px 8px 0; margin-bottom:12px;">
+            <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--primary); margin-bottom:4px;">Ta réponse :</div>
+            <div style="font-size:13px; color:var(--ink); white-space:pre-wrap;">${esc(studentAnsText)}</div>
+          </div>
+
+          <!-- Professor's feedback -->
+          <div style="background:rgba(0,0,0,0.03); border-radius:10px; padding:12px; margin-bottom:10px;">
+            <div style="font-size:12px; font-weight:700; color:var(--ink); margin-bottom:4px;">👨‍🏫 Analyse et annotation du professeur :</div>
+            <div style="font-size:13px; line-height:1.5; color:var(--ink);">${esc(qEval.feedback || "Démarche examinée.")}</div>
+          </div>
+
+          <!-- Ideal Solution -->
+          <div style="background:rgba(52,199,89,0.06); border:1px solid rgba(52,199,89,0.25); border-radius:10px; padding:12px;">
+            <div style="font-size:12px; font-weight:700; color:#248a3d; margin-bottom:4px;">✨ Solution modèle attendue :</div>
+            <div style="font-size:13px; line-height:1.5; color:var(--ink); white-space:pre-wrap;">${esc(qEval.idealSolution || q.expectedAnswerSnippet || "Se référer aux formules du cours.")}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  openModal("m-exercice-result");
+}
+
+// PDF EXPORT (Uncorrected & Graded)
+window.exportExerciceUncorrectedPDF = () => {
+  const ex = window._currentExercice;
+  if (!ex) return;
+  if (!window.jspdf?.jsPDF) {
+    showToast("Module PDF indisponible.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+  let y = 20;
+
+  // Header Banner
+  doc.setFillColor(15, 23, 42); // Slate 900
+  doc.rect(14, y, 182, 22, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("DnB Reviz — Sujet d'Entraînement & Copie", 20, y + 10);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Matière : ${ex.subject}  |  Niveau : ${ex.level || "Standard"}  |  Barème : 20 points`, 20, y + 17);
+
+  y += 30;
+
+  // Meta info box
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Titre : ${ex.title || "Exercice"}`, 14, y);
+  y += 6;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Élève : ${currentUser ? currentUser.username : "Élève"}  ·  Généré le : ${new Date(ex.createdAt || Date.now()).toLocaleDateString("fr-FR")}`, 14, y);
+  y += 6;
+  if (ex.instructions) {
+    const instLines = doc.splitTextToSize(`Consignes : ${ex.instructions}`, 180);
+    doc.text(instLines, 14, y);
+    y += instLines.length * 5 + 4;
+  }
+
+  y += 4;
+
+  // Questions and User Answers
+  (ex.questions || []).forEach((q, idx) => {
+    if (y > 240) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Question Box (Navy header with color differentiator)
+    doc.setFillColor(241, 245, 249); // light slate background
+    doc.setDrawColor(37, 99, 235); // Blue border
+    doc.setLineWidth(0.5);
+    
+    const qText = `Question ${q.questionNumber || idx + 1} (${q.points} points) : ${q.text}`;
+    const qLines = doc.splitTextToSize(qText, 172);
+    const boxH = Math.max(16, qLines.length * 5 + 8);
+
+    doc.roundedRect(14, y, 182, boxH, 2, 2, "FD");
+    doc.setTextColor(30, 58, 138); // Dark blue for question
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(qLines, 18, y + 7);
+
+    y += boxH + 6;
+
+    // Student Answer Box (Emerald/Indigo border differentiating clearly)
+    const ansObj = (window._currentExerciceAnswers || []).find(a => a.questionId === q.id);
+    const ansText = ansObj ? ansObj.answerText : (ex.mode === "papier" ? `[Réponse rédigée sur copie papier manuscrite — ${window._exPaperPhotos.length} photo(s) téléversée(s)]` : "(Aucune réponse saisie)");
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(16, 185, 129); // Emerald border for student answer
+    doc.setLineWidth(0.4);
+
+    const aLines = doc.splitTextToSize(`Réponse de l'élève :\n${ansText}`, 172);
+    const aBoxH = Math.max(16, aLines.length * 5 + 8);
+
+    if (y + aBoxH > 275) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.roundedRect(14, y, 182, aBoxH, 2, 2, "FD");
+    doc.setTextColor(5, 150, 105);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("Réponse de l'élève :", 18, y + 6);
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "normal");
+    const actualAnsLines = doc.splitTextToSize(ansText, 172);
+    doc.text(actualAnsLines, 18, y + 12);
+
+    y += aBoxH + 10;
+  });
+
+  doc.save(`dnb-copie-${(ex.title || "exercice").toLowerCase().replace(/[^a-z0-9]/g, "_")}.pdf`);
+  showToast("Copie d'entraînement (non corrigée) exportée en PDF ✓");
+};
+
+window.exportExerciceGradedPDF = () => {
+  const ex = window._currentExercice;
+  if (!ex || !ex.result) {
+    showToast("Aucune correction disponible pour l'export.");
+    return;
+  }
+  if (!window.jspdf?.jsPDF) {
+    showToast("Module PDF indisponible.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const res = ex.result;
+
+  let y = 18;
+
+  // Header Banner with Score
+  doc.setFillColor(15, 23, 42);
+  doc.rect(14, y, 182, 30, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("DnB Reviz — Rapport de Correction Officielle", 20, y + 9);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Sujet : ${ex.title || "Exercice"}  ·  Matière : ${ex.subject}  ·  Niveau : ${ex.level || "Standard"}`, 20, y + 16);
+
+  // Big Score badge on the right
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(148, y + 4, 42, 22, 3, 3, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text(`${res.totalScore} / 20`, 154, y + 14);
+  doc.setFontSize(8);
+  doc.text(`Mention : ${res.mention || "Bien"}`, 154, y + 21);
+
+  y += 38;
+
+  // Comparison & Appreciation Card
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(14, y, 182, 32, 2, 2, "FD");
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  const selfScore = ex.selfAssessment?.estimatedScore ?? "—";
+  doc.text(`Auto-évaluation élève : ${selfScore}/20   |   Note finale attribuée : ${res.totalScore}/20`, 18, y + 7);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Commentaire lucidité : ${res.selfAssessmentCritique || "Bonne auto-évaluation."}`, 18, y + 13);
+
+  const appText = `Appréciation générale : « ${res.generalAppreciation || "Travail sérieux."} »`;
+  const appLines = doc.splitTextToSize(appText, 172);
+  doc.text(appLines, 18, y + 19);
+
+  y += 38;
+
+  // Questions breakdown
+  (ex.questions || []).forEach((q, idx) => {
+    const qEval = (res.questionEvaluations || []).find(e => e.questionId === q.id) || res.questionEvaluations?.[idx] || {
+      pointsAwarded: q.points || 0,
+      maxPoints: q.points || 0,
+      feedback: "Bonne démarche.",
+      idealSolution: q.rubric || ""
+    };
+
+    if (y > 230) {
+      doc.addPage();
+      y = 20;
+    }
+
+    // Question Header Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(0.4);
+
+    const qTitle = `Question ${q.questionNumber || idx + 1} — Note : ${qEval.pointsAwarded ?? 0} / ${qEval.maxPoints ?? q.points ?? 0} pts`;
+    doc.roundedRect(14, y, 182, 10, 2, 2, "FD");
+    doc.setTextColor(30, 58, 138);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text(qTitle, 18, y + 7);
+
+    y += 14;
+
+    // Enoncé text
+    doc.setTextColor(71, 85, 105);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const qLines = doc.splitTextToSize(`Énoncé : ${q.text}`, 176);
+    doc.text(qLines, 16, y);
+    y += qLines.length * 4.5 + 4;
+
+    // Student answer
+    const ansObj = (ex.studentAnswers || []).find(a => a.questionId === q.id);
+    const ansText = ansObj ? ansObj.answerText : (ex.mode === "papier" ? `[Copie papier manuscrite téléversée]` : "(Aucune réponse)");
+    doc.setTextColor(16, 185, 129);
+    doc.setFont("helvetica", "bold");
+    doc.text("Copie de l'élève :", 16, y);
+    y += 4.5;
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "normal");
+    const ansLines = doc.splitTextToSize(ansText, 176);
+    doc.text(ansLines, 16, y);
+    y += ansLines.length * 4.5 + 4;
+
+    // Professor correction & feedback
+    doc.setTextColor(220, 38, 38);
+    doc.setFont("helvetica", "bold");
+    doc.text("Correction du Professeur :", 16, y);
+    y += 4.5;
+    doc.setTextColor(30, 41, 59);
+    doc.setFont("helvetica", "normal");
+    const fbLines = doc.splitTextToSize(qEval.feedback || "Démarche analysée.", 176);
+    doc.text(fbLines, 16, y);
+    y += fbLines.length * 4.5 + 4;
+
+    // Ideal solution
+    if (qEval.idealSolution) {
+      doc.setTextColor(37, 99, 235);
+      doc.setFont("helvetica", "bold");
+      doc.text("Solution modèle attendue :", 16, y);
+      y += 4.5;
+      doc.setTextColor(71, 85, 105);
+      doc.setFont("helvetica", "normal");
+      const idLines = doc.splitTextToSize(qEval.idealSolution, 176);
+      doc.text(idLines, 16, y);
+      y += idLines.length * 4.5 + 4;
+    }
+
+    y += 6;
+  });
+
+  doc.save(`dnb-correction-officielle-${(ex.title || "exercice").toLowerCase().replace(/[^a-z0-9]/g, "_")}.pdf`);
+  showToast("Copie corrigée par l'IA exportée en PDF ✓");
+};
+
+// Feed rendering
+window.loadExercicesFeed = () => {
+  const container = document.getElementById("exercices-feed");
+  if (!container) return;
+
+  const list = getStoredExercices();
+
+  // Apply tab filter
+  let filtered = list;
+  if (window._exerciceFilterTab === "mine") {
+    filtered = list.filter(ex => !ex.result);
+  } else if (window._exerciceFilterTab === "graded") {
+    filtered = list.filter(ex => ex.result);
+  }
+
+  // Apply subject filter
+  if (window._exerciceSubjectFilter !== "all") {
+    filtered = filtered.filter(ex => (ex.subject || "").toLowerCase() === window._exerciceSubjectFilter.toLowerCase());
+  }
+
+  // Apply search
+  const searchInput = document.getElementById("ex-search-input")?.value.toLowerCase().trim();
+  if (searchInput) {
+    filtered = filtered.filter(ex => 
+      (ex.title || "").toLowerCase().includes(searchInput) ||
+      (ex.subject || "").toLowerCase().includes(searchInput) ||
+      (ex.topic || "").toLowerCase().includes(searchInput)
+    );
+  }
+
+  // Apply sort
+  if (window._exerciceSortOrder === "score_desc") {
+    filtered.sort((a, b) => (b.result?.totalScore || 0) - (a.result?.totalScore || 0));
+  } else if (window._exerciceSortOrder === "score_asc") {
+    filtered.sort((a, b) => (a.result?.totalScore || 0) - (b.result?.totalScore || 0));
+  } else if (window._exerciceSortOrder === "oldest") {
+    filtered.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  } else {
+    filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:48px 20px; background:var(--card-bg); border-radius:20px; border:1px solid var(--hl);">
+        <div style="font-size:42px; margin-bottom:12px;">✍️</div>
+        <h3 style="margin:0 0 8px 0;">Aucun exercice trouvé</h3>
+        <p class="caption" style="max-width:400px; margin:0 auto 20px auto;">
+          ${searchInput ? "Aucun sujet ne correspond à votre recherche." : "Vous n'avez pas encore généré d'exercice d'entraînement. Cliquez ci-dessous pour lancer votre première session avec l'IA !"}
+        </p>
+        <button class="btn-pill" onclick="openCreateExerciceModal()">✨ Créer un exercice avec l'IA</button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(ex => {
+    const isGraded = Boolean(ex.result);
+    const scoreHtml = isGraded ? `
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:22px; font-weight:900; color:var(--primary);">${ex.result.totalScore}/20</span>
+        <span class="ex-badge-soft">${esc(ex.result.mention || "Noté")}</span>
+      </div>
+    ` : `
+      <span class="type-tag" style="background:rgba(255,149,0,.14); color:#b25e00; font-weight:700;">En cours d'épreuve</span>
+    `;
+
+    return `
+      <div class="ex-feed-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+              <span class="type-tag" style="background:var(--primary-l); color:var(--primary-f); font-weight:700;">${esc(ex.subject)}</span>
+              <span class="type-tag" style="background:var(--file-bg); color:var(--ink);">${esc(ex.level || "Standard")}</span>
+              <span class="type-tag" style="background:rgba(52,199,89,.12); color:#248a3d;">${ex.mode === "papier" ? "📝 Papier" : "💻 Clavier"}</span>
+              ${ex.durationMinutes ? `<span class="type-tag" style="background:var(--hl); color:var(--ink);">⏱️ ${ex.durationMinutes} min</span>` : ""}
+            </div>
+            <h3 style="margin:0 0 6px 0; font-size:18px;">${esc(ex.title)}</h3>
+            <p class="caption" style="margin:0; font-size:13px; line-height:1.4;">${esc(ex.topic)}</p>
+          </div>
+          ${scoreHtml}
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; pt-2; border-top:1px solid var(--hl); padding-top:10px;">
+          <span class="caption" style="font-size:12px;">
+            ${new Date(ex.createdAt || Date.now()).toLocaleDateString("fr-FR")} · ${ex.questions?.length || 0} question(s)
+          </span>
+          <div style="display:flex; gap:8px;">
+            ${isGraded ? `
+              <button class="btn-pill btn-sm" onclick="openPastExerciceResult('${ex.id}')">📊 Voir la correction &amp; la note</button>
+            ` : `
+              <button class="btn-pill btn-sm" onclick="openPastExerciceSession('${ex.id}')">🚀 Continuer l'épreuve</button>
+            `}
+            <button class="btn-ghost btn-sm del" onclick="deleteExerciceFromHistory('${ex.id}')" title="Supprimer cet entraînement">🗑️</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+};
+
+window.openPastExerciceSession = (id) => {
+  const list = getStoredExercices();
+  const found = list.find(ex => ex.id === id);
+  if (found) {
+    window.startExerciceSession(found);
+  }
+};
+
+window.openPastExerciceResult = (id) => {
+  const list = getStoredExercices();
+  const found = list.find(ex => ex.id === id);
+  if (found && found.result) {
+    window._currentExercice = found;
+    displayExerciceResults(found);
+  }
+};
+
+window.deleteExerciceFromHistory = (id) => {
+  if (confirm("Supprimer définitivement cet exercice et sa correction ?")) {
+    const list = getStoredExercices().filter(ex => ex.id !== id);
+    localStorage.setItem("dnb_exercices_history", JSON.stringify(list));
+    loadExercicesFeed();
+    showToast("Exercice supprimé ✓");
+  }
+};
+
+window.setExercicesFilter = (tab) => {
+  window._exerciceFilterTab = tab;
+  document.querySelectorAll(".ex-tab-filter").forEach(btn => {
+    btn.classList.toggle("active", btn.id === `filter-ex-${tab}`);
+  });
+  loadExercicesFeed();
+};
+
+window.handleExerciceSearch = (e) => {
+  loadExercicesFeed();
+};
+
+window.openExerciceFilterModal = () => {
+  openModal("m-ex-filter");
+};
+
+window.applyExerciceModalFilter = () => {
+  const subj = document.getElementById("ex-filter-modal-subject")?.value || "all";
+  const sort = document.getElementById("ex-filter-modal-sort")?.value || "newest";
+  window._exerciceSubjectFilter = subj;
+  window._exerciceSortOrder = sort;
+  closeModal("m-ex-filter");
+  loadExercicesFeed();
+  showToast("Filtres appliqués ✓");
+};
+
