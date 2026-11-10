@@ -63,6 +63,8 @@ window._pubFeedUnsub = null;
 window._dmChatsUnsub = null;
 window._dmMsgsUnsub  = null;
 window._currentViewedUser = null;
+// Invalide les rendus de profils différés lorsqu’on navigue vers une page interne.
+window._profileRenderToken = 0;
 
 window._filterContext = 'cours';
 window.filterVisibleContent = (items, type = 'post') => {
@@ -602,7 +604,8 @@ onSnapshot(collection(db, "users"), snap => {
   if (document.getElementById("page-fichesrev").classList.contains("active")) loadFRFeed();
   if (document.getElementById("page-quiz").classList.contains("active")) loadQuizFeed();
   
-  if (window._currentViewedUser) {
+  const activeProfileHash = decodeURIComponent(String(window.location.hash || "").replace(/^#/, "")).toLowerCase();
+  if (window._currentViewedUser && activeProfileHash === String(window._currentViewedUser.username || "").toLowerCase()) {
     renderPublicProfile(window._currentViewedUser.username);
     if (window._pubTabActive === 'likes') renderPubLikes();
   }
@@ -776,6 +779,13 @@ function handleHashChange() {
 
 function showInternalView(target) {
   if (target === 'matieres') target = 'accueil';
+
+  // Une navigation interne doit désactiver tout profil public encore mémorisé.
+  // Sans cela, un ancien callback Firebase/setTimeout peut rouvrir un profil
+  // supprimé et afficher « Membre introuvable » au-dessus de la page demandée.
+  window._profileRenderToken = (window._profileRenderToken || 0) + 1;
+  window._currentViewedUser = null;
+
   if (target === 'admin') {
     const isAdmin = currentUser && (currentUser.role === 'admin' || (currentUser.subRoles && currentUser.subRoles.includes('admin')));
     if (!isAdmin) { 
@@ -3128,6 +3138,9 @@ function escapeHTML(str) {
 }
 
 window.renderPublicProfile = (uname) => {
+  const renderToken = (window._profileRenderToken || 0) + 1;
+  window._profileRenderToken = renderToken;
+
   document.querySelectorAll(".page-view").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".nav-tab").forEach(b => b.classList.remove("active"));
   
@@ -3145,12 +3158,17 @@ window.renderPublicProfile = (uname) => {
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   setTimeout(() => {
+    // Le profil n’est rendu que si l’utilisateur est toujours sur cette demande.
+    // Une navigation vers Exercices (ou une autre page interne) annule ce rendu.
+    if (renderToken !== window._profileRenderToken) return;
+
     const targetUser = window.usersMap.get(uname);
-    if (!targetUser) { 
-      loading.style.display = "none"; 
-      showToast("Membre introuvable"); 
-      window.location.hash = "#accueil"; 
-      return; 
+    if (!targetUser) {
+      loading.style.display = "none";
+      window._currentViewedUser = null;
+      showToast("Membre introuvable");
+      window.location.hash = "#accueil";
+      return;
     }
 
     loading.style.display = "none";
@@ -4877,8 +4895,30 @@ window.openUserModal = (isEdit, docId = '', username = '', role = 'élève', sub
     }
   }, 100);
 };
-window.switchTab = (target) => { 
-    window.location.hash = `#${target}`; 
+window.switchTab = (target) => {
+    const normalized = String(target || "").replace(/^#/, "").replace(/^page-/, "").trim().toLowerCase();
+    const internalTargets = new Set([
+      "accueil", "classement", "cours", "fichesrev", "quiz", "exercices", "creerquiz",
+      "messages", "depot", "pub-profil", "profil", "setting", "admin", "statistiques", "matieres"
+    ]);
+
+    if (internalTargets.has(normalized)) {
+      // Annule immédiatement les callbacks de profil, avant même le hashchange.
+      // Cela évite qu’un rendu différé affiche « Membre introuvable » pendant la navigation.
+      window._profileRenderToken = (window._profileRenderToken || 0) + 1;
+      window._currentViewedUser = null;
+
+      // Si le hash est déjà identique, hashchange ne se déclenche pas :
+      // on affiche donc directement la page demandée.
+      if (window.location.hash === `#${normalized}` || (normalized === "matieres" && window.location.hash === "#accueil")) {
+        showInternalView(normalized);
+      } else {
+        window.location.hash = `#${normalized}`;
+      }
+      return;
+    }
+
+    window.location.hash = `#${normalized}`;
 };
 
 window.toggleDrawer = () => {
