@@ -39,7 +39,7 @@
     <strong>🍪 À propos des cookies :</strong> Ce site utilise Google Analytics pour analyser le trafic (nombre de visiteurs, temps passé sur les révisions, etc.) afin d'améliorer la plateforme pour tout le monde.
   </div>
   <div class="cookie-actions">
-    <button class="btn-ghost btn-sm" onclick="handleCookies(true)">Refuser</button>
+    <button class="btn-ghost btn-sm" onclick="handleCookies(false)">Refuser</button>
     <button class="btn-pill btn-sm" onclick="handleCookies(true)">Accepter</button>
   </div>
 </div>
@@ -71,8 +71,10 @@
       <input type="password" id="login-pwd" placeholder="Ton mot de passe DnB Reviz" autocomplete="current-password" aria-describedby="login-security-note">
       <p id="login-security-note" class="caption mt-1">N’utilise pas le mot de passe d’un autre service. Ton compte DnB Reviz est créé par l’administrateur.</p>
     </div>
-    <button onclick="handleLogin()" class="btn-pill mt-2" style="width:100%;justify-content:center;padding:13px">Se connecter</button>
-    <p class="caption mt-2" style="text-align:center">Si tu n'as pas de compte, contactez nous.</p>
+    <button id="login-submit" onclick="handleLogin()" class="btn-pill mt-2" style="width:100%;justify-content:center;padding:13px">Se connecter</button>
+    <p id="login-feedback" class="login-feedback" role="status" aria-live="polite" hidden></p>
+    <p class="caption mt-2 login-persistence-note">La session est mémorisée sur cet appareil. La suppression complète des données du site peut toutefois l'effacer.</p>
+    <p class="caption mt-2" style="text-align:center">Si tu n'as pas de compte, contacte-nous.</p>
   </div>
 </div>
 
@@ -1815,6 +1817,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script type="module" src="script.js?v=20261112-json-relay-fix"></script>
+<script type="module" src="script.js?v=20261112-login-pdf-layout-fix"></script>
 </body>
 </html>

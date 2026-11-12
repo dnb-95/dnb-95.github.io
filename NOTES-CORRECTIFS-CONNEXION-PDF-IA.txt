@@ -1,0 +1,16 @@
+DnB REVIZ — Notes sur les correctifs connexion / PDF / IA
+
+1. Modèle IA
+Le navigateur transmet qwen/qwen3.8-27b au relais Groq. Ce modèle gère texte, images et réponse JSON, ce qui correspond aux exercices issus de PDF et aux corrections avec photos. Groq le répertorie dans la catégorie Preview, pas Production. DeepSeek ne figure pas parmi les modèles hébergés proposés dans la liste Groq consultée pour ce correctif ; le remplacer par un identifiant non disponible provoquerait des erreurs API. Une intégration DeepSeek demanderait un fournisseur qui l'héberge, une clé distincte et une adaptation du relais.
+
+2. Connexion et conservation de session
+La connexion métier actuelle reste une connexion personnalisée basée sur la collection Firestore `users`. La session mémorisée stocke uniquement l'identifiant du document et recharge le profil depuis Firestore au démarrage. Le stockage IndexedDB est utilisé en priorité, avec repli sur localStorage. Les erreurs Firebase et les délais d'attente sont affichés sous le bouton de connexion.
+La suppression de toutes les données du site (stockage du site, IndexedDB et localStorage) efface nécessairement cette session locale. Dans ce cas, il faut se reconnecter ; aucun stockage côté navigateur ne peut survivre à l'effacement complet des données du site.
+
+Important — limite de sécurité existante : les comptes applicatifs ne sont pas encore authentifiés individuellement par Firebase Authentication. Le mot de passe personnalisé est actuellement lu depuis Firestore et comparé côté navigateur. Ce mécanisme doit être migré vers un vrai fournisseur d'authentification (Firebase Authentication email/password ou serveur de confiance avec mots de passe hachés et sessions signées) avant de considérer l'authentification comme robuste. La présente correction améliore la disponibilité et la restauration, mais ne remplace pas cette migration.
+
+3. PDF
+Les exports non corrigés et corrigés calculent leurs hauteurs, découpent les blocs trop longs sur plusieurs pages A4 et ajoutent un pied de page numéroté. Les très longs énoncés, réponses et commentaires ne doivent plus dépasser les marges du document.
+
+4. Publication
+Publier les fichiers statiques mis à jour sur GitHub Pages comme d'habitude. Aucun changement du secret GROQ_API_KEY ni du Worker Cloudflare n'est requis pour le maintien de Qwen. La construction Vite n'a pas pu être lancée dans l'environnement de contrôle, car les dépendances npm n'étaient pas installées et l'installation a expiré ; la vérification syntaxique JavaScript et les tests de pagination simulés ont en revanche réussi.

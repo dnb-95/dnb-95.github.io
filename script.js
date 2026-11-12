@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+import { getAuth, signInAnonymously, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import {
   getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
   doc, query, where, onSnapshot, orderBy, setDoc, limit
@@ -33,16 +33,163 @@ let loginLockedUntil = 0;
 
 window.currentUser = null;
 
-function saveSessionLocally(user = currentUser) {
-  if (!user) return;
+const REMEMBERED_SESSION_KEY = "dnb_reviz_session";
+const SESSION_DB_NAME = "dnb-reviz-session";
+const SESSION_DB_STORE = "sessions";
+
+function openRememberedSessionDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) {
+      reject(new Error("IndexedDB indisponible dans ce navigateur."));
+      return;
+    }
+    const request = window.indexedDB.open(SESSION_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(SESSION_DB_STORE)) {
+        database.createObjectStore(SESSION_DB_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("Ouverture du stockage de session impossible."));
+    request.onblocked = () => reject(new Error("Le stockage de session est bloqué par un autre onglet."));
+  });
+}
+
+async function readRememberedSession() {
   try {
-    const safe = { ...user };
-    delete safe.password;
-    delete safe.authPassword;
-    localStorage.setItem("dnb_reviz_session", JSON.stringify(safe));
+    const database = await openRememberedSessionDB();
+    const value = await new Promise((resolve, reject) => {
+      const transaction = database.transaction(SESSION_DB_STORE, "readonly");
+      const request = transaction.objectStore(SESSION_DB_STORE).get("active");
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+      transaction.oncomplete = () => database.close();
+      transaction.onerror = () => reject(transaction.error);
+    });
+    if (value?.id) return { id: String(value.id), username: String(value.username || "") };
   } catch (error) {
-    console.warn("Impossible de sauvegarder la session locale :", error);
+    console.info("Lecture de session IndexedDB indisponible, repli localStorage :", error?.message || error);
   }
+
+  try {
+    const raw = localStorage.getItem(REMEMBERED_SESSION_KEY);
+    if (!raw) return null;
+    const legacy = JSON.parse(raw);
+    return legacy?.id ? { id: String(legacy.id), username: String(legacy.username || "") } : null;
+  } catch (error) {
+    console.warn("Session locale illisible :", error);
+    return null;
+  }
+}
+
+async function persistRememberedSession(user) {
+  if (!user?.id) return;
+  const safe = { id: String(user.id), username: String(user.username || ""), savedAt: Date.now() };
+  try {
+    localStorage.setItem(REMEMBERED_SESSION_KEY, JSON.stringify(safe));
+  } catch (error) {
+    console.warn("Impossible de sauvegarder la session dans localStorage :", error);
+  }
+  try {
+    const database = await openRememberedSessionDB();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(SESSION_DB_STORE, "readwrite");
+      transaction.objectStore(SESSION_DB_STORE).put(safe, "active");
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(transaction.error || new Error("Écriture de session annulée."));
+    });
+    database.close();
+  } catch (error) {
+    console.info("Sauvegarde IndexedDB indisponible ; localStorage reste utilisé :", error?.message || error);
+  }
+}
+
+async function clearRememberedSession() {
+  try { localStorage.removeItem(REMEMBERED_SESSION_KEY); } catch (_) {}
+  try {
+    const database = await openRememberedSessionDB();
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction(SESSION_DB_STORE, "readwrite");
+      transaction.objectStore(SESSION_DB_STORE).delete("active");
+      transaction.oncomplete = resolve;
+      transaction.onerror = () => reject(transaction.error);
+    });
+    database.close();
+  } catch (error) {
+    console.info("Suppression IndexedDB ignorée :", error?.message || error);
+  }
+}
+
+function saveSessionLocally(user = currentUser) {
+  if (!user?.id) return;
+  // On ne conserve qu'un identifiant de session : le profil et les droits sont
+  // toujours relus depuis Firestore avant de réouvrir l'application.
+  void persistRememberedSession(user);
+}
+
+function withLoginTimeout(promise, timeoutMs = 15000) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error("login-timeout")), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
+let firebaseAuthReadyPromise = null;
+async function ensureFirebaseAuthReady() {
+  if (firebaseAuthReadyPromise) return firebaseAuthReadyPromise;
+  firebaseAuthReadyPromise = (async () => {
+    try {
+      await withLoginTimeout(setPersistence(auth, indexedDBLocalPersistence));
+    } catch (indexedDbError) {
+      console.warn("Persistance Firebase IndexedDB indisponible, repli localStorage :", indexedDbError);
+      await withLoginTimeout(setPersistence(auth, browserLocalPersistence));
+    }
+    if (!auth.currentUser) await withLoginTimeout(signInAnonymously(auth));
+    return auth.currentUser;
+  })();
+  try {
+    return await firebaseAuthReadyPromise;
+  } catch (error) {
+    firebaseAuthReadyPromise = null;
+    throw error;
+  }
+}
+
+function setLoginFeedback(message = "", state = "info") {
+  const element = document.getElementById("login-feedback");
+  if (!element) return;
+  element.textContent = message;
+  element.dataset.state = state;
+  element.hidden = !message;
+}
+
+function getLoginErrorMessage(error) {
+  const code = String(error?.code || "");
+  if (error?.message === "login-timeout") {
+    return "Le serveur met trop de temps à répondre. Vérifie ta connexion puis réessaie.";
+  }
+  if (code.includes("network-request-failed") || code === "unavailable" || /failed to fetch|network/i.test(error?.message || "")) {
+    return "Connexion réseau impossible. Vérifie ta connexion Internet puis réessaie.";
+  }
+  if (code === "permission-denied" || code.includes("permission-denied")) {
+    return "Accès à la base de données refusé. Le service de connexion doit être vérifié par l'administrateur.";
+  }
+  if (code === "unauthenticated" || code.includes("unauthenticated")) {
+    return "La session de connexion Firebase n'est pas valide. Réessaie ; si cela continue, préviens l'administrateur.";
+  }
+  if (code === "auth/operation-not-allowed") {
+    return "Le service de connexion Firebase n'est pas activé pour ce site. Préviens l'administrateur.";
+  }
+  if (code === "auth/too-many-requests") {
+    return "Trop de tentatives auprès du service. Réessaie un peu plus tard.";
+  }
+  if (code.includes("auth/")) {
+    return "Le service de connexion n'a pas pu démarrer. Réessaie dans quelques instants.";
+  }
+  return "Une erreur empêche la connexion. Réessaie ; si le problème persiste, préviens l'administrateur.";
 }
 
 window.usersMap    = new Map();
@@ -838,48 +985,77 @@ function showInternalView(target) {
   if (target === 'statistiques') loadStatisticsDashboard();
 }
 
-signInAnonymously(auth).then(async () => {
-  const s = localStorage.getItem("dnb_reviz_session");
-  if (s) {
-    const cached = JSON.parse(s);
-    hydrateSession(cached, { skipStreakCheck: true });
-    try {
-      const freshSnap = await getDoc(doc(db, "users", cached.id));
-      if (freshSnap.exists()) {
-        hydrateSession({ id: freshSnap.id, ...freshSnap.data() });
+async function bootstrapLogin() {
+  setLoginFeedback("Connexion au service en cours…");
+  try {
+    await ensureFirebaseAuthReady();
+    const remembered = await readRememberedSession();
+    if (remembered?.id) {
+      try {
+        const freshSnap = await withLoginTimeout(getDoc(doc(db, "users", remembered.id)));
+        if (freshSnap.exists()) {
+          // Ne jamais restaurer les rôles ou le profil depuis le cache local.
+          hydrateSession({ id: freshSnap.id, ...freshSnap.data() }, { skipStreakCheck: true });
+          setLoginFeedback("");
+        } else {
+          await clearRememberedSession();
+          setLoginFeedback("La session enregistrée n'existe plus. Connecte-toi avec ton identifiant et ton mot de passe.", "info");
+        }
+      } catch (restoreError) {
+        console.error("Validation de la session mémorisée impossible :", restoreError);
+        setLoginFeedback(`Session mémorisée, mais impossible de la vérifier : ${getLoginErrorMessage(restoreError)}`, "error");
       }
-    } catch(e) {
-      console.error(e);
+    } else {
+      setLoginFeedback("");
     }
+  } catch (error) {
+    console.error("Initialisation Firebase impossible :", error);
+    setLoginFeedback(getLoginErrorMessage(error), "error");
   }
   handleHashChange();
-}).catch(console.error);
+}
+
+void bootstrapLogin();
 
 window.handleLogin = async () => {
   const now = Date.now();
   if (loginLockedUntil > now) {
     const seconds = Math.ceil((loginLockedUntil - now) / 1000);
+    setLoginFeedback(`Trop de tentatives. Réessaie dans ${seconds}s.`, "error");
     showToast(`Trop de tentatives. Réessaie dans ${seconds}s.`);
     return;
   }
 
-  const id  = document.getElementById("login-id").value.trim().toLowerCase();
-  const pwd = document.getElementById("login-pwd").value.trim();
+  const id = document.getElementById("login-id").value.trim().toLowerCase();
+  // Ne pas rogner le mot de passe : les espaces éventuels font partie de celui-ci.
+  const pwd = document.getElementById("login-pwd").value;
   if (!id || !pwd) {
+    setLoginFeedback("Renseigne ton identifiant et ton mot de passe.", "error");
     showToast("Remplis tous les champs.");
     return;
   }
 
+  const button = document.getElementById("login-submit");
+  if (button) {
+    button.disabled = true;
+    button.dataset.originalLabel = button.textContent;
+    button.textContent = "Connexion…";
+  }
+  setLoginFeedback("Vérification de tes identifiants…");
+
   try {
-    const q = query(collection(db, "users"), where("username", "==", id));
-    const snap = await getDocs(q);
+    await ensureFirebaseAuthReady();
+    const usersQuery = query(collection(db, "users"), where("username", "==", id));
+    const snap = await withLoginTimeout(getDocs(usersQuery));
     if (snap.empty) {
       loginFailedAttempts += 1;
       if (loginFailedAttempts >= LOGIN_MAX_ATTEMPTS) {
         loginLockedUntil = Date.now() + LOGIN_LOCK_MS;
         loginFailedAttempts = 0;
       }
-      showToast("Identifiant ou mot de passe incorrect.");
+      const message = "Identifiant ou mot de passe incorrect.";
+      setLoginFeedback(message, "error");
+      showToast(message);
       return;
     }
 
@@ -891,16 +1067,28 @@ window.handleLogin = async () => {
         loginLockedUntil = Date.now() + LOGIN_LOCK_MS;
         loginFailedAttempts = 0;
       }
-      showToast("Identifiant ou mot de passe incorrect.");
+      const message = "Identifiant ou mot de passe incorrect.";
+      setLoginFeedback(message, "error");
+      showToast(message);
       return;
     }
 
     loginFailedAttempts = 0;
     loginLockedUntil = 0;
+    setLoginFeedback("Connexion réussie.", "success");
     hydrateSession(u);
+    document.getElementById("login-pwd").value = "";
+    setLoginFeedback("");
   } catch (error) {
-    console.error(error);
-    showToast("Impossible de se connecter pour le moment.");
+    console.error("Échec de connexion :", error);
+    const message = getLoginErrorMessage(error);
+    setLoginFeedback(message, "error");
+    showToast(message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.originalLabel || "Se connecter";
+    }
   }
 };
 
@@ -913,11 +1101,7 @@ window.handleLogout = async () => {
   currentUser = null;
   window.currentUser = null;
 
-  try {
-    localStorage.removeItem("dnb_reviz_session");
-  } catch (error) {
-    console.warn("Impossible de supprimer la session locale :", error);
-  }
+  await clearRememberedSession();
 
   try {
     closeDropdown?.();
@@ -6072,7 +6256,159 @@ function displayExerciceResults(ex) {
   openModal("m-exercice-result");
 }
 
-// PDF EXPORT (Uncorrected & Graded)
+// PDF EXPORT (Uncorrected & Graded) — mise en page adaptative avec pagination.
+const EX_PDF_LAYOUT = {
+  pageWidth: 210,
+  pageHeight: 297,
+  left: 14,
+  right: 196,
+  width: 182,
+  top: 18,
+  bottom: 279,
+  lineHeight: 4.5
+};
+
+function safePdfText(value, fallback = "—") {
+  const normalized = String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+\n/g, "\n")
+    .replace(/[“”]/g, '"')
+    .replace(/[’‘]/g, "'")
+    .replace(/[–—]/g, "-")
+    .replace(/\u00a0/g, " ")
+    .trim();
+  return normalized || fallback;
+}
+
+function pdfLines(doc, text, width, fontSize = 9, fontStyle = "normal") {
+  doc.setFont("helvetica", fontStyle);
+  doc.setFontSize(fontSize);
+  return doc.splitTextToSize(safePdfText(text), width);
+}
+
+function pdfNewPage(doc) {
+  doc.addPage();
+  return EX_PDF_LAYOUT.top;
+}
+
+function drawPdfWrappedBlock(doc, state, title, content, options = {}) {
+  const x = options.x ?? EX_PDF_LAYOUT.left;
+  const width = options.width ?? EX_PDF_LAYOUT.width;
+  const padding = options.padding ?? 4;
+  const fontSize = options.fontSize ?? 9;
+  const titleFontSize = options.titleFontSize ?? 9.5;
+  const lineHeight = options.lineHeight ?? (fontSize * 0.5);
+  const titleLineHeight = options.titleLineHeight ?? (titleFontSize * 0.5);
+  const fill = options.fill ?? [248, 250, 252];
+  const border = options.border ?? [203, 213, 225];
+  const titleColor = options.titleColor ?? [30, 41, 59];
+  const textColor = options.textColor ?? [51, 65, 85];
+  const bodyWidth = width - padding * 2;
+  const titleLines = title ? pdfLines(doc, title, bodyWidth, titleFontSize, "bold") : [];
+  const titleHeight = titleLines.length ? titleLines.length * titleLineHeight + 2 : 0;
+  const lines = pdfLines(doc, content, bodyWidth, fontSize, "normal");
+  let lineIndex = 0;
+  let continuation = false;
+
+  while (lineIndex < lines.length) {
+    let y = state.y;
+    const remainingPage = EX_PDF_LAYOUT.bottom - y;
+    const minCardHeight = padding * 2 + titleHeight + lineHeight;
+    if (remainingPage < minCardHeight) {
+      y = pdfNewPage(doc);
+      state.y = y;
+      continuation = lineIndex > 0;
+    }
+
+    const usable = EX_PDF_LAYOUT.bottom - state.y - padding * 2 - titleHeight;
+    const linesPerPage = Math.max(1, Math.floor(usable / lineHeight));
+    const chunk = lines.slice(lineIndex, lineIndex + linesPerPage);
+    const blockHeight = padding * 2 + titleHeight + chunk.length * lineHeight;
+
+    doc.setFillColor(...fill);
+    doc.setDrawColor(...border);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x, state.y, width, blockHeight, 2, 2, "FD");
+
+    let textY = state.y + padding + titleLineHeight;
+    if (titleLines.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(...titleColor);
+      const labelLines = continuation ? [...titleLines.slice(0, 1), "(suite)"] : titleLines;
+      labelLines.forEach((line, index) => {
+        if (index < titleLines.length) doc.text(line, x + padding, state.y + padding + titleLineHeight * (index + 0.85));
+      });
+      textY = state.y + padding + titleHeight;
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(...textColor);
+    chunk.forEach((line, index) => {
+      doc.text(line, x + padding, textY + lineHeight * (index + 0.85));
+    });
+
+    state.y += blockHeight + (options.gapAfter ?? 4);
+    lineIndex += chunk.length;
+    continuation = lineIndex < lines.length;
+
+    if (lineIndex < lines.length) {
+      state.y = pdfNewPage(doc);
+    }
+  }
+
+  return state.y;
+}
+
+function drawPdfHeader(doc, title, subtitle, options = {}) {
+  const x = EX_PDF_LAYOUT.left;
+  const y = options.y ?? 18;
+  const width = EX_PDF_LAYOUT.width;
+  const titleWidth = options.titleWidth ?? width - 10;
+  const titleSize = options.titleSize ?? 15;
+  const subtitleSize = options.subtitleSize ?? 8.5;
+  const titleLines = pdfLines(doc, title, titleWidth, titleSize, "bold").slice(0, 3);
+  const subtitleLines = pdfLines(doc, subtitle, options.subtitleWidth ?? width - 10, subtitleSize, "normal").slice(0, 3);
+  const height = Math.max(options.minHeight ?? 27, 8 + titleLines.length * 6 + subtitleLines.length * 4.2 + 4);
+
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(x, y, width, height, 2, 2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(titleSize);
+  doc.setTextColor(255, 255, 255);
+  titleLines.forEach((line, index) => doc.text(line, x + 6, y + 8 + index * 6));
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(subtitleSize);
+  subtitleLines.forEach((line, index) => doc.text(line, x + 6, y + 8 + titleLines.length * 6 + index * 4.2));
+  return y + height + 8;
+}
+
+function addExercicePdfFooters(doc, label) {
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.25);
+    doc.line(14, 285, 196, 285);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`DnB Reviz · ${label}`, 14, 290);
+    doc.text(`Page ${page} / ${pageCount}`, 196, 290, { align: "right" });
+  }
+}
+
+function exercicePdfFileSlug(title) {
+  return safePdfText(title, "exercice")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 70) || "exercice";
+}
+
 window.exportExerciceUncorrectedPDF = () => {
   const ex = window._currentExercice;
   if (!ex) return;
@@ -6082,96 +6418,41 @@ window.exportExerciceUncorrectedPDF = () => {
   }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  const subject = safePdfText(ex.subject, "Non précisée");
+  const level = safePdfText(ex.level, "Standard");
+  const headerSubtitle = `Matière : ${subject} · Niveau : ${level} · Barème : 20 points`;
+  const state = { y: drawPdfHeader(doc, "DnB Reviz — Sujet d'entraînement et copie", headerSubtitle, { minHeight: 29 }) };
 
-  let y = 20;
-
-  // Header Banner
-  doc.setFillColor(15, 23, 42); // Slate 900
-  doc.rect(14, y, 182, 22, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text("DnB Reviz — Sujet d'Entraînement & Copie", 20, y + 10);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Matière : ${ex.subject}  |  Niveau : ${ex.level || "Standard"}  |  Barème : 20 points`, 20, y + 17);
-
-  y += 30;
-
-  // Meta info box
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text(`Titre : ${ex.title || "Exercice"}`, 14, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Élève : ${currentUser ? currentUser.username : "Élève"}  ·  Généré le : ${new Date(ex.createdAt || Date.now()).toLocaleDateString("fr-FR")}`, 14, y);
-  y += 6;
-  if (ex.instructions) {
-    const instLines = doc.splitTextToSize(`Consignes : ${ex.instructions}`, 180);
-    doc.text(instLines, 14, y);
-    y += instLines.length * 5 + 4;
-  }
-
-  y += 4;
-
-  // Questions and User Answers
-  (ex.questions || []).forEach((q, idx) => {
-    if (y > 240) {
-      doc.addPage();
-      y = 20;
-    }
-
-    // Question Box (Navy header with color differentiator)
-    doc.setFillColor(241, 245, 249); // light slate background
-    doc.setDrawColor(37, 99, 235); // Blue border
-    doc.setLineWidth(0.5);
-    
-    const qText = `Question ${q.questionNumber || idx + 1} (${q.points} points) : ${q.text}`;
-    const qLines = doc.splitTextToSize(qText, 172);
-    const boxH = Math.max(16, qLines.length * 5 + 8);
-
-    doc.roundedRect(14, y, 182, boxH, 2, 2, "FD");
-    doc.setTextColor(30, 58, 138); // Dark blue for question
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(qLines, 18, y + 7);
-
-    y += boxH + 6;
-
-    // Student Answer Box (Emerald/Indigo border differentiating clearly)
-    const ansObj = (window._currentExerciceAnswers || []).find(a => a.questionId === q.id);
-    const ansText = ansObj ? ansObj.answerText : (ex.mode === "papier" ? `[Réponse rédigée sur copie papier manuscrite — ${window._exPaperPhotos.length} photo(s) téléversée(s)]` : "(Aucune réponse saisie)");
-
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(16, 185, 129); // Emerald border for student answer
-    doc.setLineWidth(0.4);
-
-    const aLines = doc.splitTextToSize(`Réponse de l'élève :\n${ansText}`, 172);
-    const aBoxH = Math.max(16, aLines.length * 5 + 8);
-
-    if (y + aBoxH > 275) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.roundedRect(14, y, 182, aBoxH, 2, 2, "FD");
-    doc.setTextColor(5, 150, 105);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text("Réponse de l'élève :", 18, y + 6);
-
-    doc.setTextColor(30, 41, 59);
-    doc.setFont("helvetica", "normal");
-    const actualAnsLines = doc.splitTextToSize(ansText, 172);
-    doc.text(actualAnsLines, 18, y + 12);
-
-    y += aBoxH + 10;
+  drawPdfWrappedBlock(doc, state, "Informations", `Titre : ${safePdfText(ex.title, "Exercice")}\nÉlève : ${safePdfText(currentUser?.username, "Élève")}\nGénéré le : ${new Date(ex.createdAt || Date.now()).toLocaleDateString("fr-FR")}`, {
+    fill: [241, 245, 249], border: [203, 213, 225], titleColor: [30, 41, 59], textColor: [51, 65, 85]
   });
 
-  doc.save(`dnb-copie-${(ex.title || "exercice").toLowerCase().replace(/[^a-z0-9]/g, "_")}.pdf`);
+  if (ex.instructions) {
+    drawPdfWrappedBlock(doc, state, "Consignes", ex.instructions, {
+      fill: [255, 251, 235], border: [245, 158, 11], titleColor: [146, 64, 14], textColor: [71, 85, 105]
+    });
+  }
+
+  (ex.questions || []).forEach((question, index) => {
+    const number = question.questionNumber || index + 1;
+    drawPdfWrappedBlock(doc, state, `Question ${number} · ${safePdfText(question.points, "—")} point(s)`, question.text, {
+      fill: [239, 246, 255], border: [59, 130, 246], titleColor: [30, 58, 138], textColor: [30, 41, 59], fontSize: 9.2
+    });
+
+    const answer = (window._currentExerciceAnswers || []).find(item => item.questionId === question.id);
+    const answerText = answer
+      ? answer.answerText
+      : (ex.mode === "papier"
+        ? `Réponse rédigée sur copie papier manuscrite — ${(window._exPaperPhotos || []).length} photo(s) téléversée(s).`
+        : "Aucune réponse saisie.");
+    drawPdfWrappedBlock(doc, state, "Réponse de l'élève", answerText, {
+      fill: [236, 253, 245], border: [16, 185, 129], titleColor: [5, 150, 105], textColor: [30, 41, 59]
+    });
+  });
+
+  addExercicePdfFooters(doc, "Sujet non corrigé");
+  doc.save(`dnb-copie-${exercicePdfFileSlug(ex.title)}.pdf`);
   showToast("Copie d'entraînement (non corrigée) exportée en PDF ✓");
 };
 
@@ -6187,132 +6468,76 @@ window.exportExerciceGradedPDF = () => {
   }
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const res = ex.result;
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
+  const result = ex.result;
+  const state = { y: 18 };
+  const titleLines = pdfLines(doc, "DnB Reviz — Rapport de correction", 126, 14, "bold").slice(0, 2);
+  const meta = `Sujet : ${safePdfText(ex.title, "Exercice")} · Matière : ${safePdfText(ex.subject, "Non précisée")} · Niveau : ${safePdfText(ex.level, "Standard")}`;
+  const metaLines = pdfLines(doc, meta, 126, 8, "normal").slice(0, 3);
+  const headerHeight = Math.max(39, 8 + titleLines.length * 5.8 + metaLines.length * 4 + 4);
 
-  let y = 18;
-
-  // Header Banner with Score
   doc.setFillColor(15, 23, 42);
-  doc.rect(14, y, 182, 30, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
+  doc.roundedRect(14, state.y, 182, headerHeight, 2, 2, "F");
   doc.setFont("helvetica", "bold");
-  doc.text("DnB Reviz — Rapport de Correction Officielle", 20, y + 9);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Sujet : ${ex.title || "Exercice"}  ·  Matière : ${ex.subject}  ·  Niveau : ${ex.level || "Standard"}`, 20, y + 16);
-
-  // Big Score badge on the right
-  doc.setFillColor(37, 99, 235);
-  doc.roundedRect(148, y + 4, 42, 22, 3, 3, "F");
-  doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${res.totalScore} / 20`, 154, y + 14);
-  doc.setFontSize(8);
-  doc.text(`Mention : ${res.mention || "Bien"}`, 154, y + 21);
-
-  y += 38;
-
-  // Comparison & Appreciation Card
-  doc.setFillColor(241, 245, 249);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(14, y, 182, 32, 2, 2, "FD");
-
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  const selfScore = ex.selfAssessment?.estimatedScore ?? "—";
-  doc.text(`Auto-évaluation élève : ${selfScore}/20   |   Note finale attribuée : ${res.totalScore}/20`, 18, y + 7);
-
-  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  titleLines.forEach((line, index) => doc.text(line, 19, state.y + 8 + index * 5.8));
   doc.setFont("helvetica", "normal");
-  doc.text(`Commentaire lucidité : ${res.selfAssessmentCritique || "Bonne auto-évaluation."}`, 18, y + 13);
+  doc.setFontSize(8);
+  metaLines.forEach((line, index) => doc.text(line, 19, state.y + 8 + titleLines.length * 5.8 + index * 4));
 
-  const appText = `Appréciation générale : « ${res.generalAppreciation || "Travail sérieux."} »`;
-  const appLines = doc.splitTextToSize(appText, 172);
-  doc.text(appLines, 18, y + 19);
+  doc.setFillColor(37, 99, 235);
+  doc.roundedRect(151, state.y + 5, 39, 26, 2, 2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`${safePdfText(result.totalScore, "—")} / 20`, 170.5, state.y + 16, { align: "center" });
+  doc.setFontSize(7.5);
+  doc.text(`Mention : ${safePdfText(result.mention, "—")}`, 170.5, state.y + 24, { align: "center" });
+  state.y += headerHeight + 8;
 
-  y += 38;
-
-  // Questions breakdown
-  (ex.questions || []).forEach((q, idx) => {
-    const qEval = (res.questionEvaluations || []).find(e => e.questionId === q.id) || res.questionEvaluations?.[idx] || {
-      pointsAwarded: q.points || 0,
-      maxPoints: q.points || 0,
-      feedback: "Bonne démarche.",
-      idealSolution: q.rubric || ""
-    };
-
-    if (y > 230) {
-      doc.addPage();
-      y = 20;
-    }
-
-    // Question Header Box
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(59, 130, 246);
-    doc.setLineWidth(0.4);
-
-    const qTitle = `Question ${q.questionNumber || idx + 1} — Note : ${qEval.pointsAwarded ?? 0} / ${qEval.maxPoints ?? q.points ?? 0} pts`;
-    doc.roundedRect(14, y, 182, 10, 2, 2, "FD");
-    doc.setTextColor(30, 58, 138);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(qTitle, 18, y + 7);
-
-    y += 14;
-
-    // Enoncé text
-    doc.setTextColor(71, 85, 105);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    const qLines = doc.splitTextToSize(`Énoncé : ${q.text}`, 176);
-    doc.text(qLines, 16, y);
-    y += qLines.length * 4.5 + 4;
-
-    // Student answer
-    const ansObj = (ex.studentAnswers || []).find(a => a.questionId === q.id);
-    const ansText = ansObj ? ansObj.answerText : (ex.mode === "papier" ? `[Copie papier manuscrite téléversée]` : "(Aucune réponse)");
-    doc.setTextColor(16, 185, 129);
-    doc.setFont("helvetica", "bold");
-    doc.text("Copie de l'élève :", 16, y);
-    y += 4.5;
-    doc.setTextColor(30, 41, 59);
-    doc.setFont("helvetica", "normal");
-    const ansLines = doc.splitTextToSize(ansText, 176);
-    doc.text(ansLines, 16, y);
-    y += ansLines.length * 4.5 + 4;
-
-    // Professor correction & feedback
-    doc.setTextColor(220, 38, 38);
-    doc.setFont("helvetica", "bold");
-    doc.text("Correction du Professeur :", 16, y);
-    y += 4.5;
-    doc.setTextColor(30, 41, 59);
-    doc.setFont("helvetica", "normal");
-    const fbLines = doc.splitTextToSize(qEval.feedback || "Démarche analysée.", 176);
-    doc.text(fbLines, 16, y);
-    y += fbLines.length * 4.5 + 4;
-
-    // Ideal solution
-    if (qEval.idealSolution) {
-      doc.setTextColor(37, 99, 235);
-      doc.setFont("helvetica", "bold");
-      doc.text("Solution modèle attendue :", 16, y);
-      y += 4.5;
-      doc.setTextColor(71, 85, 105);
-      doc.setFont("helvetica", "normal");
-      const idLines = doc.splitTextToSize(qEval.idealSolution, 176);
-      doc.text(idLines, 16, y);
-      y += idLines.length * 4.5 + 4;
-    }
-
-    y += 6;
+  const selfScore = ex.selfAssessment?.estimatedScore ?? "—";
+  const appreciation = safePdfText(result.generalAppreciation, "Travail examiné.");
+  drawPdfWrappedBlock(doc, state, "Bilan général", `Auto-évaluation de l'élève : ${selfScore}/20\nNote finale attribuée : ${safePdfText(result.totalScore, "—")}/20\nAnalyse de l'auto-évaluation : ${safePdfText(result.selfAssessmentCritique, "Aucune remarque.")}\nAppréciation générale : ${appreciation}`, {
+    fill: [241, 245, 249], border: [203, 213, 225], titleColor: [30, 41, 59], textColor: [51, 65, 85], fontSize: 8.8
   });
 
-  doc.save(`dnb-correction-officielle-${(ex.title || "exercice").toLowerCase().replace(/[^a-z0-9]/g, "_")}.pdf`);
+  (ex.questions || []).forEach((question, index) => {
+    const evaluation = (result.questionEvaluations || []).find(item => item.questionId === question.id)
+      || result.questionEvaluations?.[index]
+      || {
+        pointsAwarded: question.points || 0,
+        maxPoints: question.points || 0,
+        feedback: "Démarche analysée.",
+        idealSolution: question.rubric || ""
+      };
+
+    const number = question.questionNumber || index + 1;
+    drawPdfWrappedBlock(doc, state, `Question ${number} · Note : ${safePdfText(evaluation.pointsAwarded, "0")} / ${safePdfText(evaluation.maxPoints ?? question.points, "0")} pts`, question.text, {
+      fill: [239, 246, 255], border: [59, 130, 246], titleColor: [30, 58, 138], textColor: [30, 41, 59], fontSize: 8.8
+    });
+
+    const answer = (ex.studentAnswers || []).find(item => item.questionId === question.id);
+    const answerText = answer
+      ? answer.answerText
+      : (ex.mode === "papier" ? "Copie papier manuscrite téléversée." : "Aucune réponse saisie.");
+    drawPdfWrappedBlock(doc, state, "Copie de l'élève", answerText, {
+      fill: [236, 253, 245], border: [16, 185, 129], titleColor: [5, 150, 105], textColor: [30, 41, 59], fontSize: 8.8
+    });
+
+    drawPdfWrappedBlock(doc, state, "Correction et appréciation", evaluation.feedback || "Démarche analysée.", {
+      fill: [254, 242, 242], border: [248, 113, 113], titleColor: [185, 28, 28], textColor: [51, 65, 85], fontSize: 8.8
+    });
+
+    if (evaluation.idealSolution) {
+      drawPdfWrappedBlock(doc, state, "Solution modèle attendue", evaluation.idealSolution, {
+        fill: [239, 246, 255], border: [96, 165, 250], titleColor: [29, 78, 216], textColor: [51, 65, 85], fontSize: 8.8
+      });
+    }
+  });
+
+  addExercicePdfFooters(doc, "Copie corrigée");
+  doc.save(`dnb-correction-officielle-${exercicePdfFileSlug(ex.title)}.pdf`);
   showToast("Copie corrigée par l'IA exportée en PDF ✓");
 };
 
