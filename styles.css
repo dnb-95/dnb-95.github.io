@@ -499,11 +499,6 @@
   .login-logo h1{font-size:32px}
   .login-logo p{color:var(--ink-m);font-size:16px;margin-top:6px}
   .login-trust-note{font-size:12px !important;line-height:1.5;max-width:340px;margin:10px auto 0;color:var(--ink-m);}
-  .login-feedback{margin:14px 0 0;padding:11px 13px;border:1px solid var(--hl);border-radius:12px;background:var(--parchment);color:var(--ink-m);font-size:13px;line-height:1.5;overflow-wrap:anywhere;}
-  .login-feedback[data-state="error"]{border-color:rgba(220,38,38,.35);background:rgba(220,38,38,.07);color:#b91c1c;}
-  .login-feedback[data-state="success"]{border-color:rgba(16,185,129,.35);background:rgba(16,185,129,.08);color:#047857;}
-  .login-persistence-note{font-size:11px;line-height:1.45;text-align:center;color:var(--ink-m);}
-  #login-submit:disabled{opacity:.7;cursor:wait;}
   
   .hidden{display:none!important}
   .mt-1{margin-top:8px}.mt-2{margin-top:16px}.mt-3{margin-top:24px}.mt-4{margin-top:32px}

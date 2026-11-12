@@ -1,0 +1,13 @@
+DnB REVIZ — Notes sur les correctifs PDF et IA
+
+1. Modèle IA
+Le navigateur transmet qwen/qwen3.8-27b au relais Groq. Ce modèle prend en charge le texte, les images et les réponses structurées, ce qui correspond aux exercices et à la correction de copies avec photos. Le modèle a été conservé : aucun basculement vers DeepSeek n'a été effectué.
+
+2. Exports PDF
+Les exports non corrigés et corrigés utilisent une mise en page adaptative, calculent la hauteur des blocs, découpent les contenus longs sur plusieurs pages A4 et ajoutent un pied de page numéroté.
+
+3. Connexion
+Le correctif de connexion de la version intermédiaire a été retiré. Les fonctions d'authentification, la persistance de session et le formulaire de connexion sont restaurés à l'état du projet initial fourni par l'utilisateur. Aucun changement de connexion ne doit être considéré comme inclus dans cette archive.
+
+4. Publication
+Publier les fichiers statiques mis à jour sur GitHub Pages comme d'habitude. Aucun changement du secret GROQ_API_KEY ni du Worker Cloudflare n'est requis pour le maintien du modèle Qwen.

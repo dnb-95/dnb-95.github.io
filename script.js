@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
-import { getAuth, signInAnonymously, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import {
   getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
   doc, query, where, onSnapshot, orderBy, setDoc, limit
@@ -33,163 +33,16 @@ let loginLockedUntil = 0;
 
 window.currentUser = null;
 
-const REMEMBERED_SESSION_KEY = "dnb_reviz_session";
-const SESSION_DB_NAME = "dnb-reviz-session";
-const SESSION_DB_STORE = "sessions";
-
-function openRememberedSessionDB() {
-  return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
-      reject(new Error("IndexedDB indisponible dans ce navigateur."));
-      return;
-    }
-    const request = window.indexedDB.open(SESSION_DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(SESSION_DB_STORE)) {
-        database.createObjectStore(SESSION_DB_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Ouverture du stockage de session impossible."));
-    request.onblocked = () => reject(new Error("Le stockage de session est bloqué par un autre onglet."));
-  });
-}
-
-async function readRememberedSession() {
-  try {
-    const database = await openRememberedSessionDB();
-    const value = await new Promise((resolve, reject) => {
-      const transaction = database.transaction(SESSION_DB_STORE, "readonly");
-      const request = transaction.objectStore(SESSION_DB_STORE).get("active");
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-      transaction.oncomplete = () => database.close();
-      transaction.onerror = () => reject(transaction.error);
-    });
-    if (value?.id) return { id: String(value.id), username: String(value.username || "") };
-  } catch (error) {
-    console.info("Lecture de session IndexedDB indisponible, repli localStorage :", error?.message || error);
-  }
-
-  try {
-    const raw = localStorage.getItem(REMEMBERED_SESSION_KEY);
-    if (!raw) return null;
-    const legacy = JSON.parse(raw);
-    return legacy?.id ? { id: String(legacy.id), username: String(legacy.username || "") } : null;
-  } catch (error) {
-    console.warn("Session locale illisible :", error);
-    return null;
-  }
-}
-
-async function persistRememberedSession(user) {
-  if (!user?.id) return;
-  const safe = { id: String(user.id), username: String(user.username || ""), savedAt: Date.now() };
-  try {
-    localStorage.setItem(REMEMBERED_SESSION_KEY, JSON.stringify(safe));
-  } catch (error) {
-    console.warn("Impossible de sauvegarder la session dans localStorage :", error);
-  }
-  try {
-    const database = await openRememberedSessionDB();
-    await new Promise((resolve, reject) => {
-      const transaction = database.transaction(SESSION_DB_STORE, "readwrite");
-      transaction.objectStore(SESSION_DB_STORE).put(safe, "active");
-      transaction.oncomplete = resolve;
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error || new Error("Écriture de session annulée."));
-    });
-    database.close();
-  } catch (error) {
-    console.info("Sauvegarde IndexedDB indisponible ; localStorage reste utilisé :", error?.message || error);
-  }
-}
-
-async function clearRememberedSession() {
-  try { localStorage.removeItem(REMEMBERED_SESSION_KEY); } catch (_) {}
-  try {
-    const database = await openRememberedSessionDB();
-    await new Promise((resolve, reject) => {
-      const transaction = database.transaction(SESSION_DB_STORE, "readwrite");
-      transaction.objectStore(SESSION_DB_STORE).delete("active");
-      transaction.oncomplete = resolve;
-      transaction.onerror = () => reject(transaction.error);
-    });
-    database.close();
-  } catch (error) {
-    console.info("Suppression IndexedDB ignorée :", error?.message || error);
-  }
-}
-
 function saveSessionLocally(user = currentUser) {
-  if (!user?.id) return;
-  // On ne conserve qu'un identifiant de session : le profil et les droits sont
-  // toujours relus depuis Firestore avant de réouvrir l'application.
-  void persistRememberedSession(user);
-}
-
-function withLoginTimeout(promise, timeoutMs = 15000) {
-  let timeoutId;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error("login-timeout")), timeoutMs);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
-}
-
-let firebaseAuthReadyPromise = null;
-async function ensureFirebaseAuthReady() {
-  if (firebaseAuthReadyPromise) return firebaseAuthReadyPromise;
-  firebaseAuthReadyPromise = (async () => {
-    try {
-      await withLoginTimeout(setPersistence(auth, indexedDBLocalPersistence));
-    } catch (indexedDbError) {
-      console.warn("Persistance Firebase IndexedDB indisponible, repli localStorage :", indexedDbError);
-      await withLoginTimeout(setPersistence(auth, browserLocalPersistence));
-    }
-    if (!auth.currentUser) await withLoginTimeout(signInAnonymously(auth));
-    return auth.currentUser;
-  })();
+  if (!user) return;
   try {
-    return await firebaseAuthReadyPromise;
+    const safe = { ...user };
+    delete safe.password;
+    delete safe.authPassword;
+    localStorage.setItem("dnb_reviz_session", JSON.stringify(safe));
   } catch (error) {
-    firebaseAuthReadyPromise = null;
-    throw error;
+    console.warn("Impossible de sauvegarder la session locale :", error);
   }
-}
-
-function setLoginFeedback(message = "", state = "info") {
-  const element = document.getElementById("login-feedback");
-  if (!element) return;
-  element.textContent = message;
-  element.dataset.state = state;
-  element.hidden = !message;
-}
-
-function getLoginErrorMessage(error) {
-  const code = String(error?.code || "");
-  if (error?.message === "login-timeout") {
-    return "Le serveur met trop de temps à répondre. Vérifie ta connexion puis réessaie.";
-  }
-  if (code.includes("network-request-failed") || code === "unavailable" || /failed to fetch|network/i.test(error?.message || "")) {
-    return "Connexion réseau impossible. Vérifie ta connexion Internet puis réessaie.";
-  }
-  if (code === "permission-denied" || code.includes("permission-denied")) {
-    return "Accès à la base de données refusé. Le service de connexion doit être vérifié par l'administrateur.";
-  }
-  if (code === "unauthenticated" || code.includes("unauthenticated")) {
-    return "La session de connexion Firebase n'est pas valide. Réessaie ; si cela continue, préviens l'administrateur.";
-  }
-  if (code === "auth/operation-not-allowed") {
-    return "Le service de connexion Firebase n'est pas activé pour ce site. Préviens l'administrateur.";
-  }
-  if (code === "auth/too-many-requests") {
-    return "Trop de tentatives auprès du service. Réessaie un peu plus tard.";
-  }
-  if (code.includes("auth/")) {
-    return "Le service de connexion n'a pas pu démarrer. Réessaie dans quelques instants.";
-  }
-  return "Une erreur empêche la connexion. Réessaie ; si le problème persiste, préviens l'administrateur.";
 }
 
 window.usersMap    = new Map();
@@ -985,77 +838,48 @@ function showInternalView(target) {
   if (target === 'statistiques') loadStatisticsDashboard();
 }
 
-async function bootstrapLogin() {
-  setLoginFeedback("Connexion au service en cours…");
-  try {
-    await ensureFirebaseAuthReady();
-    const remembered = await readRememberedSession();
-    if (remembered?.id) {
-      try {
-        const freshSnap = await withLoginTimeout(getDoc(doc(db, "users", remembered.id)));
-        if (freshSnap.exists()) {
-          // Ne jamais restaurer les rôles ou le profil depuis le cache local.
-          hydrateSession({ id: freshSnap.id, ...freshSnap.data() }, { skipStreakCheck: true });
-          setLoginFeedback("");
-        } else {
-          await clearRememberedSession();
-          setLoginFeedback("La session enregistrée n'existe plus. Connecte-toi avec ton identifiant et ton mot de passe.", "info");
-        }
-      } catch (restoreError) {
-        console.error("Validation de la session mémorisée impossible :", restoreError);
-        setLoginFeedback(`Session mémorisée, mais impossible de la vérifier : ${getLoginErrorMessage(restoreError)}`, "error");
+signInAnonymously(auth).then(async () => {
+  const s = localStorage.getItem("dnb_reviz_session");
+  if (s) {
+    const cached = JSON.parse(s);
+    hydrateSession(cached, { skipStreakCheck: true });
+    try {
+      const freshSnap = await getDoc(doc(db, "users", cached.id));
+      if (freshSnap.exists()) {
+        hydrateSession({ id: freshSnap.id, ...freshSnap.data() });
       }
-    } else {
-      setLoginFeedback("");
+    } catch(e) {
+      console.error(e);
     }
-  } catch (error) {
-    console.error("Initialisation Firebase impossible :", error);
-    setLoginFeedback(getLoginErrorMessage(error), "error");
   }
   handleHashChange();
-}
-
-void bootstrapLogin();
+}).catch(console.error);
 
 window.handleLogin = async () => {
   const now = Date.now();
   if (loginLockedUntil > now) {
     const seconds = Math.ceil((loginLockedUntil - now) / 1000);
-    setLoginFeedback(`Trop de tentatives. Réessaie dans ${seconds}s.`, "error");
     showToast(`Trop de tentatives. Réessaie dans ${seconds}s.`);
     return;
   }
 
-  const id = document.getElementById("login-id").value.trim().toLowerCase();
-  // Ne pas rogner le mot de passe : les espaces éventuels font partie de celui-ci.
-  const pwd = document.getElementById("login-pwd").value;
+  const id  = document.getElementById("login-id").value.trim().toLowerCase();
+  const pwd = document.getElementById("login-pwd").value.trim();
   if (!id || !pwd) {
-    setLoginFeedback("Renseigne ton identifiant et ton mot de passe.", "error");
     showToast("Remplis tous les champs.");
     return;
   }
 
-  const button = document.getElementById("login-submit");
-  if (button) {
-    button.disabled = true;
-    button.dataset.originalLabel = button.textContent;
-    button.textContent = "Connexion…";
-  }
-  setLoginFeedback("Vérification de tes identifiants…");
-
   try {
-    await ensureFirebaseAuthReady();
-    const usersQuery = query(collection(db, "users"), where("username", "==", id));
-    const snap = await withLoginTimeout(getDocs(usersQuery));
+    const q = query(collection(db, "users"), where("username", "==", id));
+    const snap = await getDocs(q);
     if (snap.empty) {
       loginFailedAttempts += 1;
       if (loginFailedAttempts >= LOGIN_MAX_ATTEMPTS) {
         loginLockedUntil = Date.now() + LOGIN_LOCK_MS;
         loginFailedAttempts = 0;
       }
-      const message = "Identifiant ou mot de passe incorrect.";
-      setLoginFeedback(message, "error");
-      showToast(message);
+      showToast("Identifiant ou mot de passe incorrect.");
       return;
     }
 
@@ -1067,28 +891,16 @@ window.handleLogin = async () => {
         loginLockedUntil = Date.now() + LOGIN_LOCK_MS;
         loginFailedAttempts = 0;
       }
-      const message = "Identifiant ou mot de passe incorrect.";
-      setLoginFeedback(message, "error");
-      showToast(message);
+      showToast("Identifiant ou mot de passe incorrect.");
       return;
     }
 
     loginFailedAttempts = 0;
     loginLockedUntil = 0;
-    setLoginFeedback("Connexion réussie.", "success");
     hydrateSession(u);
-    document.getElementById("login-pwd").value = "";
-    setLoginFeedback("");
   } catch (error) {
-    console.error("Échec de connexion :", error);
-    const message = getLoginErrorMessage(error);
-    setLoginFeedback(message, "error");
-    showToast(message);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.textContent = button.dataset.originalLabel || "Se connecter";
-    }
+    console.error(error);
+    showToast("Impossible de se connecter pour le moment.");
   }
 };
 
@@ -1101,7 +913,11 @@ window.handleLogout = async () => {
   currentUser = null;
   window.currentUser = null;
 
-  await clearRememberedSession();
+  try {
+    localStorage.removeItem("dnb_reviz_session");
+  } catch (error) {
+    console.warn("Impossible de supprimer la session locale :", error);
+  }
 
   try {
     closeDropdown?.();
