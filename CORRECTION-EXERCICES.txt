@@ -1,26 +1,26 @@
 Correction du module de génération des exercices — DnB Reviz
 
-Modifications principales
-- La génération d'exercices et la correction des copies utilisent désormais le relais Cloudflare Groq déjà configuré dans le projet.
-- Le navigateur n'appelle plus les anciennes routes /api/gemini qui n'étaient pas disponibles sur l'hébergement GitHub Pages.
-- Le modèle Groq a été remplacé par qwen/qwen3.8-27b (sortie JSON et analyse d'images prises en charge).
-- Les réponses JSON sont contrôlées avant enregistrement : 3 à 6 questions et total exact de 20 points. Une seconde demande de correction du JSON est tentée en cas d'écart.
-- Les PDF sont lus localement avec PDF.js : extraction de texte (limite de 28 000 caractères et 80 pages par fichier) et transmission visuelle de trois pages maximum au total.
-- La correction des copies manuscrites accepte jusqu'à trois photos JPG, PNG ou WEBP. La note finale est recalculée depuis les points attribués à chaque question.
+Modifications conservées
+- La génération d'exercices et la correction des copies utilisent le relais Cloudflare Groq.
+- Le barème est vérifié : entre 3 et 6 questions, pour un total strict de 20 points.
+- Les PDF sont lus localement : extraction de texte et analyse visuelle de trois pages maximum.
+- La correction des copies peut exploiter jusqu'à trois photos.
 
-À conserver côté Cloudflare
-- Le relais existant doit rester disponible à l'adresse configurée dans script.js :
-  https://groqrelay.greninja71144.workers.dev
-- Le secret Cloudflare GROQ_API_KEY doit être configuré pour ce Worker.
-- L'origine autorisée doit inclure https://dnb95.github.io (c'est l'origine définie dans le Worker fourni).
+Correction supplémentaire du 12 novembre 2026
+- Le client ne parse plus directement response.json() : il inspecte le corps et le type MIME, puis distingue une réponse JSON d'une page HTML.
+- Le message d'erreur explique maintenant si le Worker est absent (404), mal configuré ou s'il renvoie une page HTML.
+- Le Worker fournit / et /health pour vérifier son déploiement en JSON et l'existence du secret GROQ_API_KEY.
+- Les erreurs et réponses inattendues du fournisseur Groq restent au format JSON.
+- L'import de script.js est versionné dans index.html pour éviter de conserver l'ancien script en cache.
 
-Fichiers modifiés
+Fichiers modifiés dans cette version
 - script.js
 - index.html
+- cloudflare-groqrelay-onesignal.js
+- wrangler.toml (nouveau)
+- DEPLOIEMENT-RELAIS-CLOUDFLARE.txt (nouveau)
 
-Vérifications effectuées
-- Vérification syntaxique JavaScript des scripts du projet.
-- Analyse HTML de index.html.
-- Tests ciblés du parsing JSON, du barème sur 20, de la normalisation de correction, de l'extraction PDF et du format de requête Groq.
-
-La compilation npm complète n'a pas pu être exécutée dans l'environnement de préparation : l'installation des dépendances a expiré.
+Action de publication requise
+Le Worker Cloudflare n'est pas publié automatiquement par GitHub Pages. Il faut le
+publier séparément et ajouter le secret GROQ_API_KEY. Les étapes détaillées se
+trouvent dans DEPLOIEMENT-RELAIS-CLOUDFLARE.txt.

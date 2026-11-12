@@ -1,0 +1,56 @@
+CORRECTION DU RELAIS DE GENERATION IA — DnB Reviz
+
+POURQUOI L'ERREUR SE PRODUISAIT
+Le site statique attend une réponse JSON du relais Groq. Le navigateur recevait à
+la place une page HTML (souvent une page 404/Cloudflare ou une ancienne page de
+l'hébergement), puis essayait de la décoder en JSON. Le message « Unexpected
+token '<' » vient de ce décalage. Ajouter uniquement le fichier Worker au dépôt
+GitHub ne le déploie pas sur Cloudflare.
+
+CE QUI A ETE CORRIGE DANS LE CODE
+- Le navigateur lit désormais la réponse en texte puis vérifie le JSON avant de
+  le parser. Une page HTML déclenche un message explicite qui indique l'URL et
+  le statut HTTP, au lieu du SyntaxError.
+- Le Worker cloudflare-groqrelay-onesignal.js renvoie du JSON pour les erreurs, les routes
+  inconnues et les méthodes interdites.
+- Une vérification GET est disponible à la racine du Worker et à /health.
+- Le fichier index.html utilise une URL de script versionnée afin de forcer le
+  navigateur à charger le script.js corrigé.
+
+ETAPE NECESSAIRE : DEPLOYER LE WORKER SUR CLOUDFLARE
+Le site GitHub Pages ne peut pas héberger l'API. Le Worker doit être publié
+séparément sur Cloudflare. Depuis ce dossier du projet, avec Wrangler installé :
+
+  npx wrangler login
+  npx wrangler deploy --config wrangler.toml
+  npx wrangler secret put GROQ_API_KEY --config wrangler.toml
+
+Après la première publication, ajouter la clé API Groq quand Wrangler la demande.
+Le secret est alors enregistré côté Cloudflare et n'est pas ajouté au dépôt public.
+Ne jamais inscrire cette clé dans script.js, index.html ou un autre fichier public.
+
+VERIFICATION APRES DEPLOIEMENT
+Ouvrir cette adresse dans un navigateur :
+  https://groqrelay.greninja71144.workers.dev/health
+
+Une réponse JSON contenant au minimum ces champs est attendue :
+  {"success":true,"service":"dnb-groq-relay","status":"ok","groqKeyConfigured":true}
+Le Worker combiné peut aussi afficher « oneSignalKeyConfigured » et la liste
+« routes » ; ces champs supplémentaires sont normaux.
+
+Si l'adresse publiée à la fin de « wrangler deploy » est différente de celle
+ci-dessus, remplacer GROQ_API_URL tout en haut de script.js par l'adresse
+réellement publiée, sans ajouter de route sauf si le Worker est configuré ainsi.
+
+Si le champ groqKeyConfigured vaut false, le secret GROQ_API_KEY n'a pas été
+ajouté au Worker Cloudflare concerné. Il faut le définir sur ce Worker précis.
+
+PUBLICATION DU SITE
+Après le déploiement du Worker, publier aussi index.html et script.js sur
+GitHub Pages. Le paramètre de version de script.js dans index.html force le
+chargement de la version corrigée.
+
+IMPORTANT
+La préparation des fichiers et les tests locaux du Worker ne publient pas le
+Worker dans le compte Cloudflare de l'utilisateur. Les étapes ci-dessus sont
+indispensables pour que l'adresse workers.dev réponde avec ce code.

@@ -3782,6 +3782,7 @@ async function callGroqAPI(systemPrompt, userPrompt, options = {}) {
   try {
     // Ne pas journaliser le contenu des copies ni les images des élèves.
     console.info("📤 Requête IA via le relais Groq :", {
+      endpoint: GROQ_API_URL,
       model: payload.model,
       messageCount: payload.messages.length,
       maxCompletionTokens: payload.max_completion_tokens
@@ -3789,11 +3790,35 @@ async function callGroqAPI(systemPrompt, userPrompt, options = {}) {
 
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      mode: "cors",
+      cache: "no-store",
+      headers: {
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json().catch(() => ({}));
+    // Lire d'abord le corps en texte permet d'identifier proprement une page
+    // HTML (Worker absent, mauvaise URL, page 404) au lieu d'afficher un
+    // SyntaxError JSON cryptique commençant par "<html>".
+    const responseText = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+    let data = null;
+
+    try {
+      data = responseText ? JSON.parse(responseText) : {};
+    } catch (_) {
+      const looksLikeHtml = /(?:text\/html|application\/xhtml\+xml)/i.test(contentType) || /^\s*<(?:!doctype\s+html|html|head|body)\b/i.test(responseText);
+      if (looksLikeHtml) {
+        if (response.status === 404) {
+          throw new Error(`Le relais IA Groq est introuvable (HTTP 404). Le Worker Cloudflare n'est probablement pas déployé à l'adresse ${GROQ_API_URL}. Déploie le fichier cloudflare-groqrelay-onesignal.js avec la configuration wrangler.toml fournie, puis actualise le site.`);
+        }
+        throw new Error(`Le relais IA a renvoyé une page HTML au lieu de JSON (HTTP ${response.status}, ${contentType || "type inconnu"}). L'adresse ${GROQ_API_URL} ne répond pas comme un Worker Groq. Vérifie le déploiement Cloudflare et la version publiée du Worker.`);
+      }
+      throw new Error(`Réponse invalide du relais IA (HTTP ${response.status}, ${contentType || "type inconnu"}). Le serveur n'a pas renvoyé de JSON valide.`);
+    }
+
     if (!response.ok) {
       const message = data?.error?.message || data?.error || data?.message || `Erreur HTTP ${response.status}`;
       throw new Error(typeof message === "string" ? message : JSON.stringify(message));
@@ -3801,11 +3826,15 @@ async function callGroqAPI(systemPrompt, userPrompt, options = {}) {
 
     const content = data?.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("Le service IA a renvoyé une réponse vide.");
+      const detail = data?.error?.message || data?.message;
+      throw new Error(detail ? String(detail) : "Le relais IA répond correctement, mais le service Groq n'a renvoyé aucun contenu. Vérifie la clé GROQ_API_KEY et le modèle configuré dans Cloudflare.");
     }
     return parseGroqJSON(content);
   } catch (e) {
     console.error("❌ Erreur callGroqAPI :", e);
+    if (e instanceof TypeError && /fetch|network|failed/i.test(e.message)) {
+      throw new Error("Impossible de joindre le relais IA Groq. Vérifie que le Worker Cloudflare est déployé et que son adresse correspond à GROQ_API_URL.");
+    }
     throw e;
   }
 }

@@ -1,0 +1,4 @@
+name = "groqrelay"
+main = "cloudflare-groqrelay-onesignal.js"
+compatibility_date = "2026-11-12"
+workers_dev = true
