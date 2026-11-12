@@ -20,7 +20,8 @@ const db   = getFirestore(app);
 window.emailjs.init("2VkygefcXxbSOlhFX");
 
 const GROQ_API_URL = "https://groqrelay.greninja71144.workers.dev";
-const GROQ_MODEL   = "deepseek-r1-distill-llama-70b"; 
+const GROQ_MODEL   = "qwen/qwen3.8-27b"; // Modèle actif, JSON et vision pris en charge par Groq.
+
 
 
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -3746,54 +3747,65 @@ window.handleSendDM = async (e) => {
   btn.disabled = false;
 };
 
-async function callGroqAPI(systemPrompt, userPrompt) {
-  const conversationHistory = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt }
-  ];
+function parseGroqJSON(content) {
+  if (content && typeof content === "object" && !Array.isArray(content)) return content;
+  const raw = String(content || "").trim();
+  const withoutFences = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
 
+  try {
+    return JSON.parse(withoutFences);
+  } catch (_) {
+    const start = withoutFences.indexOf("{");
+    const end = withoutFences.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(withoutFences.slice(start, end + 1));
+    }
+    throw new Error("La réponse de l'IA ne contient pas de JSON valide.");
+  }
+}
+
+async function callGroqAPI(systemPrompt, userPrompt, options = {}) {
   const payload = {
-    model: GROQ_MODEL,
-    messages: conversationHistory,
-    temperature: 0.6,
-    max_tokens: 3000,
+    model: options.model || GROQ_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: options.temperature ?? 0.35,
+    max_completion_tokens: options.maxCompletionTokens || 8192,
     response_format: { type: "json_object" }
   };
 
-  console.log("📤 Envoi à Groq via Worker :", payload);
-
   try {
+    // Ne pas journaliser le contenu des copies ni les images des élèves.
+    console.info("📤 Requête IA via le relais Groq :", {
+      model: payload.model,
+      messageCount: payload.messages.length,
+      maxCompletionTokens: payload.max_completion_tokens
+    });
+
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("❌ Réponse Worker :", response.status, errorText);
-      throw new Error(`Erreur HTTP ${response.status}: ${errorText}`);
+      const message = data?.error?.message || data?.error || data?.message || `Erreur HTTP ${response.status}`;
+      throw new Error(typeof message === "string" ? message : JSON.stringify(message));
     }
 
-    const data = await response.json();
-    console.log("✅ Réponse Groq reçue :", data);
-
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error("Réponse Groq invalide : pas de choix");
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("Le service IA a renvoyé une réponse vide.");
     }
-
-    const text = data.choices[0].message.content;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
-    } else {
-      throw new Error("La réponse de l'IA ne contient pas de JSON valide.");
-    }
+    return parseGroqJSON(content);
   } catch (e) {
     console.error("❌ Erreur callGroqAPI :", e);
-    showToast("Erreur avec l'IA : " + e.message);
     throw e;
   }
 }
@@ -5166,6 +5178,81 @@ function readFileAsBase64(file) {
   });
 }
 
+// Extraction locale du texte PDF : les fichiers ne sont plus envoyés à une
+// route Gemini qui n'existe pas sur GitHub Pages.
+async function extractExercisePDFContext(pdfFiles = []) {
+  if (!pdfFiles.length) return { text: "", imageParts: [] };
+  if (!window.pdfjsLib) {
+    throw new Error("Le lecteur PDF n'a pas pu être chargé. Actualise la page puis réessaie.");
+  }
+
+  const pdfjs = window.pdfjsLib;
+  pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+  const textSections = [];
+  const imageParts = [];
+  let remainingText = 28000;
+
+  for (const pdf of pdfFiles) {
+    const dataUrl = String(pdf.base64 || "");
+    const base64 = dataUrl.includes(",") ? dataUrl.slice(dataUrl.indexOf(",") + 1) : dataUrl;
+    if (!base64) continue;
+
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const pdfDocument = await pdfjs.getDocument({ data: bytes }).promise;
+    const pagesText = [];
+
+    for (let pageNumber = 1; pageNumber <= Math.min(pdfDocument.numPages, 80) && remainingText > 0; pageNumber++) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map(item => typeof item.str === "string" ? item.str : "")
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (pageText) {
+        const clipped = pageText.slice(0, remainingText);
+        pagesText.push(`Page ${pageNumber} : ${clipped}`);
+        remainingText -= clipped.length;
+      }
+
+      // Les trois premières pages de documents peuvent aussi être analysées
+      // visuellement (schémas, graphiques ou PDF numérisés).
+      if (imageParts.length < 3) {
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(1.6, 1600 / Math.max(baseViewport.width, baseViewport.height));
+        const viewport = page.getViewport({ scale });
+        const canvas = window.document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext("2d");
+        if (context) {
+          await page.render({ canvasContext: context, viewport }).promise;
+          imageParts.push({
+            type: "image_url",
+            image_url: { url: canvas.toDataURL("image/jpeg", 0.72) }
+          });
+        }
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    }
+
+    textSections.push(`Document : ${pdf.name || "Cours PDF"} (${pdfDocument.numPages} page(s))\n${pagesText.join("\n") || "Aucun texte sélectionnable détecté ; jusqu’à trois pages ont été transmises en image si possible."}`);
+    if (remainingText <= 0) break;
+  }
+
+  return {
+    text: textSections.join("\n\n").slice(0, 28000),
+    imageParts
+  };
+}
+
 function renderExercicePDFList() {
   const listDiv = document.getElementById("ex-pdf-list");
   if (!listDiv) return;
@@ -5231,6 +5318,50 @@ window.selectExerciceMode = (mode) => {
   if (cardPapier) cardPapier.classList.toggle("active", mode === "papier");
 };
 
+// Vérifie et homogénéise la réponse structurée de l'IA avant de l'enregistrer.
+function normalizeGeneratedExercise(data, params) {
+  if (!data || typeof data !== "object" || !Array.isArray(data.questions)) {
+    throw new Error("La réponse générée ne contient pas de liste de questions exploitable.");
+  }
+  if (data.questions.length < 3 || data.questions.length > 6) {
+    throw new Error("Le sujet doit contenir entre 3 et 6 questions.");
+  }
+
+  const questions = data.questions.map((question, index) => {
+    const points = Number(question?.points);
+    if (!String(question?.text || "").trim() || !Number.isFinite(points) || points <= 0) {
+      throw new Error(`La question ${index + 1} est incomplète ou son barème est invalide.`);
+    }
+    return {
+      ...question,
+      id: index + 1,
+      questionNumber: index + 1,
+      title: String(question.title || `Question ${index + 1}`),
+      text: String(question.text).trim(),
+      points: Number(points.toFixed(2)),
+      hint: String(question.hint || ""),
+      rubric: String(question.rubric || "Critères d'évaluation à préciser."),
+      expectedAnswerSnippet: String(question.expectedAnswerSnippet || "")
+    };
+  });
+
+  const total = Number(questions.reduce((sum, question) => sum + question.points, 0).toFixed(2));
+  if (total !== 20) {
+    throw new Error(`Le barème généré totalise ${total}/20 au lieu de 20/20.`);
+  }
+
+  return {
+    ...data,
+    title: String(data.title || `Entraînement — ${params.topic}`),
+    subject: params.subject,
+    topic: params.topic,
+    level: params.level,
+    instructions: String(data.instructions || "Répondez à chaque question en justifiant soigneusement votre démarche."),
+    totalPoints: 20,
+    questions
+  };
+}
+
 // Generate Exercise with AI
 window.handleGenerateAIExercice = async () => {
   const subjSelect = document.getElementById("ex-create-subject");
@@ -5263,34 +5394,77 @@ window.handleGenerateAIExercice = async () => {
 
   const durationMinutes = window._exTimerActive ? window._exDuration : 0;
   const mode = window._exMode;
-
   const loadingDiv = document.getElementById("ex-create-loading");
   const actionsDiv = document.getElementById("ex-create-actions");
   if (loadingDiv) loadingDiv.style.display = "block";
   if (actionsDiv) actionsDiv.style.display = "none";
 
   try {
-    const response = await fetch("/api/gemini/generate-exercise", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        subject,
-        topic,
-        level,
-        details,
-        linkedContext,
-        durationMinutes,
-        mode,
-        pdfFiles: window._exUploadedPDFs
-      })
+    const pdfContext = await extractExercisePDFContext(window._exUploadedPDFs || []);
+    const parameters = { subject, topic, level, details, linkedContext, durationMinutes, mode };
+    const promptText = `Crée un sujet d'exercice complet, authentique et rigoureux pour un élève.
+
+PARAMÈTRES :
+${JSON.stringify(parameters, null, 2)}
+
+${pdfContext.text ? `CONTENU DES DOCUMENTS FOURNIS :\n${pdfContext.text}\n` : ""}
+
+CONSIGNES IMPÉRATIVES :
+1. Génère de 3 à 6 questions progressives, variées et adaptées à la matière, au thème et au niveau demandés.
+2. Le total des points doit être EXACTEMENT 20. La somme numérique de questions[].points doit donc être égale à 20, sans approximation.
+3. Chaque question doit contenir un énoncé complet, clair, autonome et sans ambiguïté.
+4. Chaque question doit contenir un barème détaillé dans rubric, une indication méthodologique dans hint (chaîne vide si inutile) et une synthèse de la réponse attendue dans expectedAnswerSnippet.
+5. Utilise les documents fournis comme source prioritaire, sans inventer de contenu qui les contredirait. Les extraits textuels peuvent couvrir plusieurs pages ; les images jointes montrent jusqu’à trois pages au total, en privilégiant le début des documents.
+6. Les consignes doivent être adaptées à la matière : calculs et unités en sciences, rédaction et citations en français, analyse de documents en histoire-géographie, etc.
+7. N'inclus pas les réponses attendues dans le texte visible des questions.
+
+RENVOIE UNIQUEMENT UN OBJET JSON VALIDE, sans Markdown, avec cette structure :
+{
+  "title": "Titre du contrôle",
+  "subject": "Matière",
+  "topic": "Thème",
+  "level": "Niveau",
+  "durationMinutes": 60,
+  "mode": "clavier",
+  "instructions": "Consignes générales pour l'élève",
+  "totalPoints": 20,
+  "questions": [
+    {
+      "id": 1,
+      "questionNumber": 1,
+      "title": "Thème de la question",
+      "text": "Énoncé complet",
+      "points": 5,
+      "hint": "Indice facultatif",
+      "rubric": "Critères et répartition précise des points",
+      "expectedAnswerSnippet": "Synthèse de la solution attendue"
+    }
+  ]
+}`;
+
+    const userContent = [
+      { type: "text", text: promptText },
+      ...pdfContext.imageParts
+    ];
+    const systemPrompt = "Tu es un professeur expérimenté de l'Éducation nationale française. Produis un sujet pédagogique rigoureux, parfaitement adapté au niveau demandé. Respecte strictement le JSON et le barème total de 20 points.";
+
+    let data = await callGroqAPI(systemPrompt, userContent, {
+      maxCompletionTokens: 8192,
+      temperature: 0.35
     });
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Erreur de génération.");
+    try {
+      data = normalizeGeneratedExercise(data, parameters);
+    } catch (validationError) {
+      // Une seconde passe corrige les petits écarts de format ou de barème.
+      const repairPrompt = `Corrige le JSON d'exercice ci-dessous. Conserve le fond des questions, mais assure-toi qu'il y a entre 3 et 6 questions, que chaque question possède text et points, et que la somme des points est EXACTEMENT 20. Réponds uniquement avec le JSON corrigé.\n\nErreur détectée : ${validationError.message}\n\nJSON à corriger :\n${JSON.stringify(data)}`;
+      data = await callGroqAPI(systemPrompt, repairPrompt, {
+        maxCompletionTokens: 8192,
+        temperature: 0.15
+      });
+      data = normalizeGeneratedExercise(data, parameters);
     }
 
-    const data = await response.json();
     data.id = "ex_" + Date.now();
     data.createdAt = Date.now();
     data.author = currentUser ? currentUser.username : "Élève";
@@ -5300,12 +5474,10 @@ window.handleGenerateAIExercice = async () => {
     saveExerciceToHistory(data);
     closeModal("m-create-exercice");
     showToast("Exercice d'entraînement prêt ✓");
-    
-    // Launch the exercise session
     window.startExerciceSession(data);
   } catch (err) {
     console.error("Erreur génération exercice :", err);
-    showToast("Erreur lors de la génération de l'exercice : " + err.message);
+    showToast("Erreur lors de la génération : " + (err?.message || "réessaie dans quelques instants."));
   } finally {
     if (loadingDiv) loadingDiv.style.display = "none";
     if (actionsDiv) actionsDiv.style.display = "flex";
@@ -5349,10 +5521,10 @@ window.startExerciceSession = (exercice) => {
         Munissez-vous de vos feuilles de brouillon ou copies et de vos stylos. Traitez les questions ci-dessous en numérotant bien chaque réponse. Une fois terminé, prenez votre travail en photo et téléversez les pages ci-dessous pour la correction de l'IA.
       </p>
       <div class="ex-photo-upload-area" onclick="document.getElementById('ex-paper-photo-input').click()">
-        <input type="file" id="ex-paper-photo-input" accept="image/*" multiple capture="environment" style="display:none;" onchange="handleExercicePaperPhotos(event)">
+        <input type="file" id="ex-paper-photo-input" accept="image/jpeg,image/png,image/webp" multiple capture="environment" style="display:none;" onchange="handleExercicePaperPhotos(event)">
         <div style="font-size:28px; margin-bottom:6px;">📸</div>
         <div style="font-weight:700; font-size:14px; color:var(--ink);">Ajouter / Prendre en photo ma copie manuscrite</div>
-        <div class="caption">Compatible smartphone &amp; ordinateur (JPG, PNG, WEBP - plusieurs pages possibles)</div>
+        <div class="caption">JPG, PNG ou WEBP — jusqu’à 3 photos par copie</div>
       </div>
       <div class="ex-photo-preview-grid" id="ex-photo-preview-grid"></div>
     `;
@@ -5503,15 +5675,19 @@ window.handleExercicePaperPhotos = async (e) => {
   if (!files.length) return;
 
   for (const f of files) {
-    if (!f.type.startsWith("image/")) {
-      showToast("Seules les photos sont autorisées.");
+    if (window._exPaperPhotos.length >= 3) {
+      showToast("La correction IA accepte jusqu'à 3 photos par copie.");
+      break;
+    }
+    if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) {
+      showToast("Format photo non pris en charge : utilise JPG, PNG ou WEBP.");
       continue;
     }
     try {
       const base64 = await readFileAsBase64(f);
       window._exPaperPhotos.push({
         name: f.name,
-        mimeType: f.type || "image/jpeg",
+        mimeType: f.type,
         base64: base64
       });
     } catch (_) {
@@ -5622,6 +5798,38 @@ window.handleSelfEvalScoreChange = (e) => {
   if (disp) disp.innerText = `${score} / 20`;
 };
 
+function normalizeExerciseGrading(result, exercise) {
+  if (!result || typeof result !== "object") {
+    throw new Error("La correction générée est vide ou invalide.");
+  }
+
+  const sourceEvaluations = Array.isArray(result.questionEvaluations) ? result.questionEvaluations : [];
+  const questionEvaluations = (exercise.questions || []).map((question, index) => {
+    const evaluation = sourceEvaluations.find(item => item && String(item.questionId) === String(question.id)) || sourceEvaluations[index] || {};
+    const maxPoints = Number(question.points) || 0;
+    const rawPoints = Number(evaluation.pointsAwarded);
+    const pointsAwarded = Number(Math.min(maxPoints, Math.max(0, Number.isFinite(rawPoints) ? rawPoints : 0)).toFixed(2));
+    return {
+      questionId: question.id,
+      pointsAwarded,
+      maxPoints,
+      status: pointsAwarded >= maxPoints ? "correct" : pointsAwarded > 0 ? "partial" : "incorrect",
+      feedback: String(evaluation.feedback || "La réponse n'a pas pu être évaluée en détail."),
+      idealSolution: String(evaluation.idealSolution || question.expectedAnswerSnippet || question.rubric || "")
+    };
+  });
+
+  const totalScore = Number(questionEvaluations.reduce((sum, item) => sum + item.pointsAwarded, 0).toFixed(2));
+  return {
+    ...result,
+    totalScore,
+    maxScore: 20,
+    questionEvaluations,
+    strengths: Array.isArray(result.strengths) ? result.strengths : [],
+    improvements: Array.isArray(result.improvements) ? result.improvements : []
+  };
+}
+
 // Submit for AI Grading
 window.submitExerciceForGrading = async () => {
   if (!window._currentExercice) return;
@@ -5635,37 +5843,82 @@ window.submitExerciceForGrading = async () => {
   if (actionsDiv) actionsDiv.style.display = "none";
 
   try {
-    const payload = {
-      exercise: window._currentExercice,
-      mode: window._currentExercice.mode,
-      textAnswers: window._currentExerciceAnswers,
-      paperPhotos: window._exPaperPhotos,
-      selfAssessment: window._currentSelfEval
-    };
+    const exercise = window._currentExercice;
+    const mode = exercise.mode || window._exMode;
+    const paperPhotos = (window._exPaperPhotos || []).slice(0, 3);
+    const gradingPrompt = `Tu es un professeur correcteur français neutre, précis et exigeant mais constructif.
 
-    const response = await fetch("/api/gemini/grade-exercise", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+SUJET D'ORIGINE :
+${JSON.stringify({
+  title: exercise.title,
+  subject: exercise.subject,
+  topic: exercise.topic,
+  level: exercise.level,
+  instructions: exercise.instructions,
+  totalPoints: 20,
+  questions: exercise.questions
+}, null, 2)}
 
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Erreur lors de la correction.");
+MODE DE RÉPONSE : ${mode === "papier" ? "Copie manuscrite photographiée. Analyse attentivement les images jointes et associe les réponses à chaque numéro de question." : "Réponses saisies au clavier."}
+
+RÉPONSES SAISIES :
+${JSON.stringify(window._currentExerciceAnswers || [], null, 2)}
+
+AUTO-ÉVALUATION :
+${JSON.stringify(window._currentSelfEval || {}, null, 2)}
+
+PHOTOS : ${paperPhotos.length} image(s) jointe(s), dans la limite de trois images par analyse. En mode papier, fonde la correction sur les pages visibles et signale toute partie illisible.
+
+DIRECTIVES DE NOTATION :
+1. Évalue chaque question séparément, en respectant strictement son barème.
+2. Ne donne aucun point pour un résultat non justifié lorsque la justification est demandée ; valorise les démarches correctes.
+3. Calcule la note finale comme la somme exacte des points attribués, sur 20.
+4. Fournis un retour concret, une solution idéale et une appréciation globale utile pour progresser.
+5. N'invente jamais une réponse de l'élève. En cas d'absence ou d'illisibilité, indique-le et attribue les points en conséquence.
+
+Réponds exclusivement avec un JSON valide de cette forme :
+{
+  "totalScore": 13.5,
+  "maxScore": 20,
+  "mention": "Assez bien",
+  "generalAppreciation": "Appréciation générale argumentée",
+  "selfAssessmentCritique": "Analyse de l'auto-évaluation",
+  "strengths": ["Point fort"],
+  "improvements": ["Axe de progrès"],
+  "questionEvaluations": [
+    {
+      "questionId": 1,
+      "pointsAwarded": 3,
+      "maxPoints": 4,
+      "status": "partial",
+      "feedback": "Analyse précise de la réponse",
+      "idealSolution": "Solution détaillée attendue"
     }
+  ]
+}`;
 
-    const gradingResult = await response.json();
+    const userContent = [
+      { type: "text", text: gradingPrompt },
+      ...paperPhotos.map(photo => ({
+        type: "image_url",
+        image_url: { url: photo.base64 }
+      }))
+    ];
+    const gradingResultRaw = await callGroqAPI(
+      "Tu es un professeur correcteur spécialisé. Évalue les réponses avec impartialité et renvoie uniquement le JSON demandé.",
+      userContent,
+      { maxCompletionTokens: 8192, temperature: 0.2 }
+    );
+    const gradingResult = normalizeExerciseGrading(gradingResultRaw, exercise);
 
-    // Attach results to exercise
-    window._currentExercice.result = gradingResult;
-    window._currentExercice.studentAnswers = window._currentExerciceAnswers;
-    window._currentExercice.paperPhotosCount = window._exPaperPhotos.length;
-    window._currentExercice.selfAssessment = window._currentSelfEval;
-    window._currentExercice.gradedAt = Date.now();
+    exercise.result = gradingResult;
+    exercise.studentAnswers = window._currentExerciceAnswers;
+    exercise.paperPhotosCount = paperPhotos.length;
+    exercise.selfAssessment = window._currentSelfEval;
+    exercise.gradedAt = Date.now();
 
-    saveExerciceToHistory(window._currentExercice);
+    saveExerciceToHistory(exercise);
 
-    // Stop timer
     if (window._exTimerInterval) {
       clearInterval(window._exTimerInterval);
       window._exTimerInterval = null;
@@ -5673,14 +5926,12 @@ window.submitExerciceForGrading = async () => {
 
     closeModal("m-self-evaluation");
     closeModal("m-take-exercice");
-
-    // Display result modal
-    displayExerciceResults(window._currentExercice);
+    displayExerciceResults(exercise);
     loadExercicesFeed();
     showToast("Copie corrigée par le professeur IA ✓");
   } catch (err) {
     console.error("Erreur grading :", err);
-    showToast("Erreur lors de la correction : " + err.message);
+    showToast("Erreur lors de la correction : " + (err?.message || "réessaie dans quelques instants."));
   } finally {
     if (loadingDiv) loadingDiv.style.display = "none";
     if (actionsDiv) actionsDiv.style.display = "flex";
