@@ -24,10 +24,3 @@ Action de publication requise
 Le Worker Cloudflare n'est pas publié automatiquement par GitHub Pages. Il faut le
 publier séparément et ajouter le secret GROQ_API_KEY. Les étapes détaillées se
 trouvent dans DEPLOIEMENT-RELAIS-CLOUDFLARE.txt.
-
-
-Améliorations complémentaires du 12 novembre 2026
-- Les deux exports d'exercices utilisent maintenant des blocs à hauteur calculée et découpent les longs textes sur plusieurs pages A4.
-- Les titres, consignes, réponses, retours de correction et solutions modèles sont renvoyés à la page suivante dès que nécessaire ; ajout d'un pied de page avec numérotation.
-- Les modifications de connexion introduites dans une version intermédiaire ont été retirées à la demande de l'utilisateur ; les fonctions et l'interface de connexion ont été restaurées depuis le projet d'origine.
-- Le modèle utilisé reste qwen/qwen3.8-27b : il prend en charge les images et les sorties JSON. Groq le classe actuellement dans ses modèles Preview (donc moins garanti pour une production critique). DeepSeek n'est pas proposé dans la liste actuelle des modèles hébergés actifs de Groq.

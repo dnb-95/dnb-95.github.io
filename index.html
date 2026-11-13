@@ -23,16 +23,18 @@
 <meta name="twitter:image" content="https://iili.io/CR2iW9n.png">
 <meta property="og:type" content="website" />
 <meta name="keywords" content="révisions, fiches de révision, bac, quiz IA, cours en ligne, entraide lycéens, dnb reviz, réviser gratuitement">
-<link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
+<link rel="icon" id="dynamic-favicon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#f5f5f7">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" id="dynamic-theme-color" content="#f5f5f7">
+<meta name="apple-mobile-web-app-status-bar-style" id="dynamic-apple-status" content="default">
 <meta name="apple-mobile-web-app-title" content="DnB Reviz">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
+<link rel="manifest" id="dynamic-manifest" href="manifest.json">
+<link rel="apple-touch-icon" id="dynamic-apple-icon" href="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="/styles.css">
 
 <div id="cookie-banner" class="cookie-banner" style="display: none;">
   <div class="cookie-text">
@@ -57,7 +59,7 @@
 <div id="view-login" class="login-screen">
   <div class="login-box">
     <div class="login-logo">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="Logo DnB Reviz">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="DnB Reviz">
       <h1>DnB Reviz</h1>
       <p>Avant-première - bêta.</p>
       <p class="login-trust-note">Application scolaire indépendante créée par Dan Bouillet. Ce site n'est pas une page de connexion Google, Microsoft ou ENT.</p>
@@ -93,8 +95,7 @@
       <button class="nav-tab"         data-target="quiz"      onclick="switchTab('quiz')">Quiz</button>
       <button class="nav-tab"         data-target="exercices" onclick="switchTab('exercices')">Exercices</button>
       <button class="nav-tab"         data-target="messages"  onclick="switchTab('messages')">Messages <span class="nav-unread-dot"></span></button>
-      <button class="nav-tab hidden"  data-target="depot"     id="tab-depot" onclick="switchTab('depot')">Déposer un cours</button>
-      <button class="nav-tab hidden"  data-target="creerquiz" id="tab-creer-quiz" onclick="switchTab('creerquiz')">Créer un quiz</button>
+      <button class="nav-tab hidden"  data-target="publier"   id="tab-publier" onclick="switchTab('publier')">Publier du contenu</button>
       <button class="nav-tab hidden admin-only" data-target="admin" id="tab-admin" onclick="switchTab('admin')">Admin</button>
       <button class="nav-tab hidden admin-only" data-target="statistiques" id="tab-statistiques" onclick="switchTab('statistiques')">Statistiques</button>
     </nav>
@@ -111,7 +112,6 @@
         <button onclick="switchTab('profil');closeDropdown()">👤 Mon profil</button>
         <button onclick="goToMyLikes();closeDropdown()">❤️ Mes likes</button>
         <button onclick="switchTab('setting');closeDropdown()">⚙️ Paramètres</button>
-        <a href="/download/zip" download="dnb-reviz-complet.zip" style="text-decoration:none; display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; color:var(--ink); border-radius:8px; background:var(--file-bg); margin:4px 0;" onclick="closeDropdown()">📦 Télécharger le projet (ZIP)</a>
         <hr>
         <button class="red" onclick="handleLogout()">Se déconnecter</button>
       </div>
@@ -144,11 +144,8 @@
         <button class="drawer-btn" data-tab="messages" onclick="switchTab('messages');closeDrawer()">
           <span class="d-icon">💬</span> Messages <span class="nav-unread-dot"></span>
         </button>
-        <button class="drawer-btn hidden" id="drawer-depot" data-tab="depot" onclick="switchTab('depot');closeDrawer()">
-          <span class="d-icon">➕</span> Déposer un cours
-        </button>
-        <button class="drawer-btn hidden" id="drawer-creer-quiz" data-tab="creerquiz" onclick="switchTab('creerquiz');closeDrawer()">
-          <span class="d-icon">✨</span> Créer un quiz
+        <button class="drawer-btn hidden" id="drawer-publier" data-tab="publier" onclick="switchTab('publier');closeDrawer()">
+          <span class="d-icon">✨</span> Publier du contenu
         </button>
         <button class="drawer-btn hidden admin-only" id="drawer-admin" data-tab="admin" onclick="switchTab('admin');closeDrawer()">
           <span class="d-icon">🛠️</span> Administration
@@ -194,28 +191,43 @@
         <button class="btn-pill-van admin-only hidden" onclick="openModal('m-add-mat')">+ Ajouter une matière</button>
       </div>
       
-      <div class="home-streak-card" id="home-streak-card">
-        <div class="home-streak-visual" aria-hidden="true">
-          <div class="duo-flame duo-flame-main">
-            <span class="duo-flame-layer duo-flame-outer"></span>
-            <span class="duo-flame-layer duo-flame-middle"></span>
-            <span class="duo-flame-layer duo-flame-inner"></span>
+      <div class="home-streak-card streak-tier-amber" id="home-streak-card">
+        <div class="home-streak-celebration" id="home-streak-celebration" aria-hidden="true"></div>
+        <div class="home-streak-main-row">
+          <div class="home-streak-visual" aria-hidden="true">
+            <div class="flame-aura"></div>
+            <div id="home-flame-svg-wrap" class="flame-svg-wrap"></div>
+            <div id="home-flame-particles" class="flame-particles"></div>
           </div>
-        </div>
-        <div class="home-streak-copy">
-          <div class="home-streak-kicker">Ta série</div>
-          <div class="home-streak-title">
-            <span id="home-streak-count">0 jour</span>
+          <div class="home-streak-copy">
+            <div class="home-streak-meta-line">
+              <span class="home-streak-kicker">Ta série</span>
+              <span aria-hidden="true">·</span>
+              <span class="home-streak-tier-label" id="home-streak-tier-label">Flamme Ambrée</span>
+              <span class="home-streak-shield-inline" id="home-streak-shield-inline" title="Boucliers de gel de flamme">🛡️ 0/3</span>
+            </div>
+            <div class="home-streak-title">
+              <span id="home-streak-count">0 jour</span>
+            </div>
+            <button type="button" class="home-streak-ranking-link" id="home-streak-rank" onclick="openStreakRanking()">
+              #— au classement
+            </button>
+            <div class="home-streak-status" id="home-streak-status" aria-live="polite">Ta flamme se prépare…</div>
+            <div class="streak-extinguish-message" aria-live="assertive"></div>
           </div>
-          <button type="button" class="home-streak-ranking-link" id="home-streak-rank" onclick="openStreakRanking()">
-            #— au classement
+          <button type="button" class="home-streak-open" onclick="openStreakRanking()" aria-label="Ouvrir le classement">
+            →
           </button>
-          <div class="home-streak-status" id="home-streak-status" aria-live="polite">Ta flamme se prépare…</div>
-          <div class="streak-extinguish-message" aria-live="assertive"></div>
         </div>
-        <button type="button" class="home-streak-open" onclick="openStreakRanking()" aria-label="Ouvrir le classement">
-          →
-        </button>
+        <div class="home-daily-goal-strip" id="home-daily-goal-strip">
+          <div class="home-daily-goal-top">
+            <span id="home-daily-goal-text">Objectif du jour : 0 / 15 min</span>
+            <button type="button" class="home-daily-goal-edit" onclick="openDailyGoalModal()">Régler l'objectif</button>
+          </div>
+          <div class="home-daily-goal-track">
+            <div class="home-daily-goal-fill" id="home-daily-goal-fill" style="width: 0%;"></div>
+          </div>
+        </div>
       </div>
 
       <div id="pinned-annonces-zone"></div>
@@ -309,48 +321,11 @@
       <div class="feed-wrap" id="quiz-feed"></div>
     </section>
 
-    <section id="page-creerquiz" class="page-view">
-      <h1>Créer un Quiz</h1>
-      <p class="tagline">Prépare un test pour toute la classe (max 50 questions)</p>
-      <div class="depot-wrap">
-        <div class="input-group">
-          <label>Titre du Quiz *</label>
-          <input type="text" id="quiz-create-title" placeholder="Ex : Les bases du Droit">
-        </div>
-        <div class="input-group">
-          <label>Matière *</label>
-          <select id="quiz-create-matiere"></select>
-        </div>
-        <div class="input-group">
-          <label>Description (facultatif)</label>
-          <textarea id="quiz-create-desc" placeholder="Ce qu'il faut savoir avant de commencer…"></textarea>
-        </div>
-        <div class="input-group">
-          <label>Tag</label>
-          <div class="tag-option-group">
-            <label class="tag-option">
-              <input type="checkbox" id="quiz-create-tag-bac" value="bac">
-              <span>🎓 Bac</span>
-            </label>
-          </div>
-        </div>
-        
-        <div id="quiz-questions-container" style="margin-top:24px; display:flex; flex-direction:column; gap:20px;">
-        </div>
-        
-        <button class="btn-ghost mt-2" style="width:100%; border:2px dashed var(--hl); padding:14px; font-weight:600;" onclick="addQuizQuestionField()">+ Ajouter une question</button>
-
-        <button class="btn-pill mt-4" onclick="handleCreateManualQuiz()" style="width:100%;justify-content:center;padding:13px">
-          Publier le Quiz
-        </button>
-      </div>
-    </section>
-
     <section id="page-exercices" class="page-view">
       <div class="ph-row">
         <div>
           <h1>Exercices</h1>
-          <p class="tagline">Entraîne-toi sur des sujets complets générés par l'IA d'après tes cours et corrigés avec rigueur.</p>
+          <p class="tagline">Entraîne-toi sur des sujets générés par l'IA ou partagés par tes professeurs et ta classe.</p>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button class="btn-pill" onclick="openCreateExerciceModal()">✨ Créer un exercice avec l'IA</button>
@@ -360,9 +335,9 @@
 
       <div class="ex-banner-card mt-3">
         <div class="ex-banner-left">
-          <div class="ex-banner-badge">Professeur IA Spécialisé &amp; Rigoureux</div>
-          <h3 style="margin: 6px 0 4px 0; font-size:18px;">Prépare tes contrôles et examens en conditions réelles</h3>
-          <p class="caption" style="margin:0; line-height:1.5;">Génère des sujets sur-mesure d'après tes vrais PDF de cours, active un chronomètre personnalisable (jusqu'à 4h), choisis de répondre au clavier ou sur feuille papier, auto-évalue-toi, puis reçois une correction neutre et exigeante notée sur 20 avec export PDF.</p>
+          <div class="ex-banner-badge">Professeur IA Spécialisé &amp; Sujets Partagés</div>
+          <h3 style="margin: 6px 0 4px 0; font-size:18px;">Prépare tes contrôles et entraîne-toi avec ta classe</h3>
+          <p class="caption" style="margin:0; line-height:1.5;">Génère des sujets sur-mesure d'après tes PDF de cours, teste librement les exercices créés par tes professeurs ou camarades de classe, et refais tes sujets déjà corrigés pour progresser.</p>
         </div>
         <div class="ex-banner-right">
           <button class="btn-pill" style="padding:10px 18px; font-size:14px; white-space:nowrap;" onclick="openCreateExerciceModal()">Nouveau sujet 🚀</button>
@@ -372,11 +347,12 @@
       <div class="ex-filter-bar mt-3">
         <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">
           <button class="btn-ghost btn-sm ex-tab-filter active" id="filter-ex-all" onclick="setExercicesFilter('all')">Tous les sujets</button>
+          <button class="btn-ghost btn-sm ex-tab-filter" id="filter-ex-profs" onclick="setExercicesFilter('profs')">Créés par les profs</button>
           <button class="btn-ghost btn-sm ex-tab-filter" id="filter-ex-mine" onclick="setExercicesFilter('mine')">Mes sessions en cours</button>
           <button class="btn-ghost btn-sm ex-tab-filter" id="filter-ex-graded" onclick="setExercicesFilter('graded')">Mes copies corrigées</button>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <input type="text" id="ex-search-input" placeholder="Rechercher par matière, thème..." style="padding:7px 12px; font-size:13px; border-radius:18px; border:1px solid var(--hl); background:var(--card-bg); color:var(--ink);" oninput="handleExerciceSearch(event)">
+          <input type="text" id="ex-search-input" placeholder="Rechercher par matière, thème, auteur..." style="padding:7px 12px; font-size:13px; border-radius:18px; border:1px solid var(--hl); background:var(--card-bg); color:var(--ink);" oninput="handleExerciceSearch(event)">
         </div>
       </div>
 
@@ -426,111 +402,227 @@
       </div>
     </section>
 
-    <section id="page-depot" class="page-view">
-      <h1>Partager un cours</h1>
-      <p class="tagline">Ajoute jusqu'à 5 fichiers pour toute la classe</p>
-      <div class="depot-wrap">
-        <div class="input-group">
-          <label>Titre du document *</label>
-          <input type="text" id="post-title" placeholder="Ex : Chapitre 3 — Le contrat de travail" maxlength="50">
-          <div class="caption" style="text-align:right; margin-top:4px;">
-            <span id="title-counter">0</span>/50 caractères
+    <section id="page-publier" class="page-view">
+      <div class="ph-row" style="margin-bottom:18px;">
+        <div>
+          <h1>Publier du contenu</h1>
+          <p class="tagline">Partage un cours coloré, des fiches, des vidéos YouTube, des PDF, des fichiers Excel ou un quiz interactif avec ta classe.</p>
+        </div>
+      </div>
+
+      <div class="publish-mode-switcher" role="tablist" aria-label="Type de publication">
+        <button type="button" role="tab" aria-selected="true" class="publish-mode-btn active" id="pub-mode-btn-post" onclick="switchPublishMode('post')">
+          <span class="publish-mode-icon">📚</span>
+          <span>
+            <strong>Cours, Fiche &amp; Ressource</strong>
+            <small>Texte coloré, YouTube, images, PDF, Excel…</small>
+          </span>
+        </button>
+        <button type="button" role="tab" aria-selected="false" class="publish-mode-btn" id="pub-mode-btn-quiz" onclick="switchPublishMode('quiz')">
+          <span class="publish-mode-icon">🎯</span>
+          <span>
+            <strong>Quiz interactif</strong>
+            <small>QCM jusqu'à 50 questions pour la classe</small>
+          </span>
+        </button>
+      </div>
+
+      <div id="publish-mode-post" class="publish-studio-grid">
+        <div class="depot-wrap publish-studio-form">
+          <div class="publish-row-2">
+            <div class="input-group">
+              <label>Catégorie *</label>
+              <select id="post-type" onchange="handlePostTypeChange(); updatePublishLivePreview();">
+                <option value="cours">Cours</option>
+                <option value="fiches">Fiche mémo</option>
+                <option value="revisions">Révisions</option>
+                <option value="annonce" class="admin-only hidden">Annonce (Épinglée en haut de l'accueil)</option>
+              </select>
+            </div>
+            <div class="input-group" id="group-post-matiere">
+              <label>Matière (Firebase) *</label>
+              <select id="post-matiere" onchange="updatePublishLivePreview()"></select>
+            </div>
           </div>
-        </div>
-        <div class="input-group">
-          <label>Catégorie *</label>
-          <select id="post-type" onchange="handlePostTypeChange()">
-            <option value="cours">Cours</option>
-            <option value="fiches">Fiche mémo</option>
-            <option value="revisions">Révisions</option>
-            <option value="annonce" class="admin-only hidden">Annonce (Épinglée en haut de l'accueil)</option>
-          </select>
-        </div>
-        <div class="input-group" id="group-post-matiere">
-          <label>Matière *</label>
-          <select id="post-matiere"></select>
-        </div>
-        <div class="input-group admin-only hidden" id="group-post-announcement-visibility" style="display:none;">
-          <label>Visibilité de l'annonce épinglée</label>
-          <select id="post-announcement-visibility">
-            <option value="tous">Tout le monde</option>
-            <option value="eleves">Uniquement les élèves</option>
-            <option value="professeurs">Uniquement les professeurs</option>
-          </select>
-        </div>
-        <div class="input-group depot-description-group">
-          <label>Description (facultatif)</label>
-          <textarea id="post-desc" aria-hidden="true" tabindex="-1"></textarea>
-          <div id="post-desc-editor" class="richtext-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Un mot sur ce document…"></div>
-          <div id="post-desc-toolbar" class="richtext-toolbar hidden" aria-label="Mise en forme de la description">
-            <button type="button" title="Gras" aria-label="Gras" onclick="applyRichTextCommand('bold')">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h6.1a4.1 4.1 0 0 1 2.3 7.5A4.4 4.4 0 0 1 13.8 21H7V5Zm3 3v3h3a1.5 1.5 0 0 0 0-3h-3Zm0 6v4h3.5a2 2 0 0 0 0-4H10Z" fill="currentColor"/></svg>
-            </button>
-            <button type="button" title="Italique" aria-label="Italique" onclick="applyRichTextCommand('italic')">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5h9v3h-3.3l-3.4 8H16v3H7v-3h3.3l3.4-8H10V5Z" fill="currentColor"/></svg>
-            </button>
-            <button type="button" title="Souligné" aria-label="Souligné" onclick="applyRichTextCommand('underline')">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v7.2a2.4 2.4 0 0 0 4.8 0V5h3v7.3a5.4 5.4 0 0 1-10.8 0V5ZM6 20h12v2H6v-2Z" fill="currentColor"/></svg>
-            </button>
-            <div class="richtext-color-wrap">
-              <button type="button" title="Couleur du texte" aria-label="Couleur du texte" onclick="toggleRichTextColorMenu()">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5h7.6l1.7 3.2-1.8 1-1-1.7H9.3l-1 1.7-1.8-1L8.2 5Z" fill="currentColor"/><path d="M6 11h12l-2 7H8l-2-7Zm3 7v3h6v-3H9Z" fill="currentColor" opacity=".65"/><path d="M17.5 3.5c.9-.9 2.3-.9 3.2 0 .6.6.6 1.6 0 2.2l-2.2 2.2-3.2-3.2 2.2-1.2Z" fill="currentColor"/></svg>
+
+          <div class="input-group">
+            <label>Titre du document *</label>
+            <input type="text" id="post-title" placeholder="Ex : Chapitre 3 — Le contrat de travail" maxlength="80" oninput="updatePublishLivePreview()">
+            <div class="caption" style="text-align:right; margin-top:4px;">
+              <span id="title-counter">0</span>/80 caractères
+            </div>
+          </div>
+
+          <div class="input-group admin-only hidden" id="group-post-announcement-visibility" style="display:none;">
+            <label>Visibilité de l'annonce épinglée</label>
+            <select id="post-announcement-visibility">
+              <option value="tous">Tout le monde</option>
+              <option value="eleves">Uniquement les élèves</option>
+              <option value="professeurs">Uniquement les professeurs</option>
+            </select>
+          </div>
+
+          <div class="input-group depot-description-group">
+            <label>Contenu &amp; mise en forme colorée</label>
+            <textarea id="post-desc" aria-hidden="true" tabindex="-1"></textarea>
+            <div id="post-desc-editor" class="richtext-editor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Rédige ton cours, mets en couleur les notions clés, ajoute des listes…"></div>
+            <div id="post-desc-toolbar" class="richtext-toolbar" aria-label="Mise en forme du contenu">
+              <button type="button" title="Gras" aria-label="Gras" onclick="applyRichTextCommand('bold')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h6.1a4.1 4.1 0 0 1 2.3 7.5A4.4 4.4 0 0 1 13.8 21H7V5Zm3 3v3h3a1.5 1.5 0 0 0 0-3h-3Zm0 6v4h3.5a2 2 0 0 0 0-4H10Z" fill="currentColor"/></svg>
               </button>
-              <div id="post-desc-color-palette" class="richtext-color-palette hidden">
-                <button type="button" class="richtext-color-swatch" aria-label="Violet" style="--swatch:#8b5cf6" onclick="applyRichTextColor('#8b5cf6')"></button>
-                <button type="button" class="richtext-color-swatch" aria-label="Bleu" style="--swatch:#2563eb" onclick="applyRichTextColor('#2563eb')"></button>
-                <button type="button" class="richtext-color-swatch" aria-label="Vert" style="--swatch:#16a34a" onclick="applyRichTextColor('#16a34a')"></button>
-                <button type="button" class="richtext-color-swatch" aria-label="Orange" style="--swatch:#ea580c" onclick="applyRichTextColor('#ea580c')"></button>
-                <button type="button" class="richtext-color-swatch" aria-label="Rouge" style="--swatch:#dc2626" onclick="applyRichTextColor('#dc2626')"></button>
-                <button type="button" class="richtext-color-swatch" aria-label="Noir" style="--swatch:#111827" onclick="applyRichTextColor('#111827')"></button>
+              <button type="button" title="Italique" aria-label="Italique" onclick="applyRichTextCommand('italic')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5h9v3h-3.3l-3.4 8H16v3H7v-3h3.3l3.4-8H10V5Z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" title="Souligné" aria-label="Souligné" onclick="applyRichTextCommand('underline')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v7.2a2.4 2.4 0 0 0 4.8 0V5h3v7.3a5.4 5.4 0 0 1-10.8 0V5ZM6 20h12v2H6v-2Z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" title="Barré" aria-label="Barré" onclick="applyRichTextCommand('strikeThrough')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16v2H4v-2Zm4.5-4.5C8.5 5.6 10.1 4.5 12.5 4.5c2.2 0 3.7 1 4.2 2.7l-2.1.6c-.3-.9-1.1-1.4-2.1-1.4-1.2 0-1.9.5-1.9 1.2 0 .6.4 1 1.4 1.3H8.8c-.2-.4-.3-.9-.3-1.4Zm7.1 8.5c0 2.1-1.8 3.5-4.3 3.5-2.4 0-4.1-1.1-4.6-2.9l2.1-.6c.3 1 1.2 1.6 2.5 1.6 1.3 0 2.1-.5 2.1-1.4 0-.4-.2-.8-.5-1.1h2.5c.1.3.2.6.2.9Z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" title="Liste à puces" aria-label="Liste à puces" onclick="applyRichTextCommand('insertUnorderedList')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 4.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 4.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM9 6.5h11v2H9v-2Zm0 4.5h11v2H9v-2Zm0 4.5h11v2H9v-2Z" fill="currentColor"/></svg>
+              </button>
+              <button type="button" title="Liste numérotée" aria-label="Liste numérotée" onclick="applyRichTextCommand('insertOrderedList')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 6H5v4H3.8V7.2H3V6h.5Zm0 6c1 0 1.7.6 1.7 1.4 0 .6-.3 1-.9 1.5l-.8.7h1.8v1H2.8v-.8l1.2-1.1c.4-.4.6-.7.6-1 0-.4-.3-.6-.7-.6-.4 0-.7.2-.9.6l-.8-.5c.3-.7.9-1.2 1.8-1.2ZM9 6.5h11v2H9v-2Zm0 4.5h11v2H9v-2Zm0 4.5h11v2H9v-2Z" fill="currentColor"/></svg>
+              </button>
+              <div class="richtext-color-wrap">
+                <button type="button" title="Couleur du texte" aria-label="Couleur du texte" onclick="toggleRichTextColorMenu('text')">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5h7.6l1.7 3.2-1.8 1-1-1.7H9.3l-1 1.7-1.8-1L8.2 5Z" fill="currentColor"/><path d="M6 11h12l-2 7H8l-2-7Zm3 7v3h6v-3H9Z" fill="currentColor" opacity=".65"/><path d="M17.5 3.5c.9-.9 2.3-.9 3.2 0 .6.6.6 1.6 0 2.2l-2.2 2.2-3.2-3.2 2.2-1.2Z" fill="currentColor"/></svg>
+                </button>
+                <div id="post-desc-color-palette" class="richtext-color-palette hidden">
+                  <button type="button" class="richtext-color-swatch" aria-label="Violet" style="--swatch:#8b5cf6" onclick="applyRichTextColor('#8b5cf6')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Bleu" style="--swatch:#2563eb" onclick="applyRichTextColor('#2563eb')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Cyan" style="--swatch:#0891b2" onclick="applyRichTextColor('#0891b2')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Vert" style="--swatch:#16a34a" onclick="applyRichTextColor('#16a34a')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Ambre" style="--swatch:#d97706" onclick="applyRichTextColor('#d97706')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Orange" style="--swatch:#ea580c" onclick="applyRichTextColor('#ea580c')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Rouge" style="--swatch:#dc2626" onclick="applyRichTextColor('#dc2626')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Rose" style="--swatch:#db2777" onclick="applyRichTextColor('#db2777')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Gris foncé" style="--swatch:#334155" onclick="applyRichTextColor('#334155')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Blanc" style="--swatch:#ffffff" onclick="applyRichTextColor('#ffffff')"></button>
+                  <label class="richtext-custom-color" title="Couleur personnalisée">
+                    <span>+</span>
+                    <input type="color" id="post-desc-custom-color" value="#6366f1" onchange="applyRichTextColor(this.value)">
+                  </label>
+                </div>
+              </div>
+              <div class="richtext-color-wrap">
+                <button type="button" title="Surligner le texte" aria-label="Surligner le texte" onclick="toggleRichTextColorMenu('hilite')">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.2 4.3a1.5 1.5 0 0 1 2.1 0l2.4 2.4a1.5 1.5 0 0 1 0 2.1l-8.8 8.8-4.5 1.1 1.1-4.5 7.7-9.9ZM4 20h16v2H4v-2Z" fill="currentColor"/></svg>
+                </button>
+                <div id="post-desc-hilite-palette" class="richtext-color-palette hidden">
+                  <button type="button" class="richtext-color-swatch" aria-label="Surligner Jaune" style="--swatch:#fef08a" onclick="applyRichTextHighlight('#fef08a')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Surligner Menthe" style="--swatch:#bbf7d0" onclick="applyRichTextHighlight('#bbf7d0')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Surligner Ciel" style="--swatch:#bae6fd" onclick="applyRichTextHighlight('#bae6fd')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Surligner Lavande" style="--swatch:#e9d5ff" onclick="applyRichTextHighlight('#e9d5ff')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Surligner Rose" style="--swatch:#fbcfe8" onclick="applyRichTextHighlight('#fbcfe8')"></button>
+                  <button type="button" class="richtext-color-swatch" aria-label="Sans surlignage" style="--swatch:transparent" onclick="applyRichTextHighlight('transparent')"></button>
+                </div>
+              </div>
+              <button type="button" title="Effacer le style" aria-label="Effacer le style" onclick="applyRichTextCommand('removeFormat')">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h12v2.5h-4.7l-1.9 5.3-1.9-1.9 1.2-3.4H6V5Zm-1.3 9.2 1.4-1.4 8.5 8.5-1.4 1.4-2.8-2.8L9 21H6.5l2.2-5.7-4-1.1Z" fill="currentColor"/></svg>
+              </button>
+            </div>
+            <div class="caption" style="text-align:right; margin-top:4px;">
+              <span id="desc-counter">0</span>/1200 caractères
+            </div>
+          </div>
+
+          <div class="input-group" id="group-post-tags">
+            <label>Tags</label>
+            <div class="tag-option-group">
+              <label class="tag-option">
+                <input type="checkbox" name="post-tag" value="bac" onchange="updatePublishLivePreview()">
+                <span>🎓 Bac</span>
+              </label>
+              <label class="tag-option">
+                <input type="checkbox" name="post-tag" value="exercices" onchange="updatePublishLivePreview()">
+                <span>📝 Exercices</span>
+              </label>
+              <label class="tag-option">
+                <input type="checkbox" name="post-tag" value="information" onchange="updatePublishLivePreview()">
+                <span>ℹ️ Information</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="publish-media-box">
+            <div class="input-group">
+              <label>🎬 Vidéo YouTube en embed (optionnel)</label>
+              <input type="url" id="post-youtube-url" placeholder="https://www.youtube.com/watch?v=... ou youtu.be/..." oninput="handlePublishYouTubeInput()">
+              <div id="post-youtube-preview" class="publish-yt-preview hidden"></div>
+            </div>
+
+            <div class="input-group" style="margin-top:14px;">
+              <label>📎 Fichiers joints (jusqu'à 5 · Images avec preview, PDF, Excel sans preview…)</label>
+              <div class="drop-zone" id="drop-zone">
+                <input type="file" id="post-file" multiple onchange="handleFileSelect(event)">
+                <div style="font-size:28px;margin-bottom:6px">📁</div>
+                <div style="font-size:14px;font-weight:600;color:var(--ink)">Glisse tes fichiers ici ou <span style="color:var(--primary)">parcourir</span></div>
+                <p class="caption mt-1">Images (JPG, PNG, WebP), PDF, Excel (.xlsx, .xls, .csv), Word, MP4 — max 5 fichiers (25 Mo)</p>
+              </div>
+              <div class="file-prev publish-files-panel" id="file-prev">
+                <div class="publish-files-head">
+                  <div><span id="file-prev-icon">📁</span> <strong id="file-prev-name"></strong></div>
+                  <button type="button" onclick="clearFile()" class="btn-ghost btn-sm">✕ Tout retirer</button>
+                </div>
+                <div id="file-prev-list" class="publish-files-grid"></div>
               </div>
             </div>
-          </div>
-          <div class="caption" style="text-align:right; margin-top:4px;">
-            <span id="desc-counter">0</span>/350 caractères
-          </div>
-        </div>
-        <div class="input-group" id="group-post-tags">
-          <label>Tags</label>
-          <div class="tag-option-group">
-            <label class="tag-option">
-              <input type="checkbox" name="post-tag" value="bac">
-              <span>🎓 Bac</span>
-            </label>
-            <label class="tag-option">
-              <input type="checkbox" name="post-tag" value="exercices">
-              <span>📝 Exercices</span>
-            </label>
-            <label class="tag-option">
-              <input type="checkbox" name="post-tag" value="information">
-              <span>ℹ️ Information</span>
-            </label>
-          </div>
-        </div>
-        <div class="input-group">
-          <label>Fichiers (jusqu'à 5)</label>
-          <div class="drop-zone" id="drop-zone">
-            <input type="file" id="post-file" multiple onchange="handleFileSelect(event)">
-            <div style="font-size:30px;margin-bottom:8px">📎</div>
-            <div style="font-size:14px;font-weight:500;color:var(--ink-m)">Glisse ici ou <span style="color:var(--primary);font-weight:600">parcourir</span></div>
-            <p class="caption mt-1">Tous types de fichiers — max 5 fichiers (25 Mo au total)</p>
-          </div>
-          <div class="file-prev" id="file-prev" style="flex-direction:column; align-items:stretch; gap:6px;">
-            <div style="display:flex; align-items:center; justify-content:space-between;">
-              <div><span id="file-prev-icon">📁</span> <span id="file-prev-name"></span></div>
-              <button type="button" onclick="clearFile()" style="background:transparent;color:var(--ink-m);font-size:14px;cursor:pointer;">✕ Tout retirer</button>
+
+            <div class="input-group" style="margin-top:14px;">
+              <label>🔗 Autre lien externe (Drive, site, ressource en ligne…)</label>
+              <input type="url" id="post-url" placeholder="https://drive.google.com/..." oninput="updatePublishLivePreview()">
             </div>
-            <div id="file-prev-list" style="font-size:12px; color:var(--ink-m); max-height:100px; overflow-y:auto; padding-top:4px; border-top:1px solid rgba(0,0,0,0.05);"></div>
           </div>
+
+          <button class="btn-pill mt-3" id="btn-submit-publish-post" onclick="handleCreatePost()" style="width:100%;justify-content:center;padding:13px">
+            Publier avec la classe
+          </button>
         </div>
-        <div class="or-div">ou</div>
-        <div class="input-group">
-          <label>Lien externe (Drive, PDF en ligne…)</label>
-          <input type="url" id="post-url" placeholder="YouTube, Drive, PDF en ligne…">
+
+        <aside class="publish-studio-preview" aria-label="Aperçu en direct">
+          <div class="publish-preview-head">
+            <span class="caption" style="font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Aperçu en direct</span>
+            <span class="caption">Rendu dans le fil</span>
+          </div>
+          <div id="publish-live-preview-card"></div>
+        </aside>
+      </div>
+
+      <div id="publish-mode-quiz" class="hidden">
+        <div class="depot-wrap" style="max-width:780px;">
+          <div class="publish-row-2">
+            <div class="input-group">
+              <label>Titre du Quiz *</label>
+              <input type="text" id="quiz-create-title" placeholder="Ex : Les bases du Droit">
+            </div>
+            <div class="input-group">
+              <label>Matière (Firebase) *</label>
+              <select id="quiz-create-matiere"></select>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Description (facultatif)</label>
+            <textarea id="quiz-create-desc" placeholder="Ce qu'il faut savoir avant de commencer…"></textarea>
+          </div>
+          <div class="input-group">
+            <label>Tag</label>
+            <div class="tag-option-group">
+              <label class="tag-option">
+                <input type="checkbox" id="quiz-create-tag-bac" value="bac">
+                <span>🎓 Bac</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="quiz-questions-container" style="margin-top:20px; display:flex; flex-direction:column; gap:16px;"></div>
+
+          <button class="btn-ghost mt-2" style="width:100%; border:2px dashed var(--hl); padding:14px; font-weight:600;" onclick="addQuizQuestionField()">+ Ajouter une question</button>
+          <button class="btn-pill mt-4" onclick="handleCreateManualQuiz()" style="width:100%;justify-content:center;padding:13px">
+            Publier le Quiz
+          </button>
         </div>
-        <button class="btn-pill mt-2" onclick="handleCreatePost()" style="width:100%;justify-content:center;padding:13px">
-          Partager avec la classe
-        </button>
       </div>
     </section>
 
@@ -678,21 +770,99 @@
 
     <section id="page-setting" class="page-view">
       <h1>Paramètres</h1>
-      <p class="tagline">Personnalise ton expérience</p>
+      <p class="tagline">Personnalise ton expérience et débloque des ambiances en révisant</p>
       <div class="settings-wrap">
         <div class="settings-sec">
-          <h3>🎨 Apparence &amp; Options</h3>
-          <div class="setting-row">
-            <div>
-              <div class="setting-label">Thème sombre</div>
-              <div class="setting-desc">Passe l'interface en mode nuit</div>
+          <h3>🎨 Thèmes &amp; Ambiances visuelles déblocables</h3>
+          <div class="study-unlock-banner" id="study-unlock-banner">
+            <div class="study-unlock-head">
+              <div>
+                <div class="study-unlock-label">Temps total de révision sur DnB Reviz</div>
+                <div class="study-unlock-time" id="settings-total-study-time">0 min</div>
+              </div>
+              <div class="study-unlock-next" id="settings-next-unlock">Prochain thème à 15 min</div>
             </div>
-            <label class="tog tog-dark">
-              <input type="checkbox" id="tog-dark" onchange="applyTheme(this.checked)">
-              <div class="tog-track"></div>
-              <div class="tog-thumb"></div>
-            </label>
+            <div class="study-unlock-track">
+              <div class="study-unlock-fill" id="settings-study-progress" style="width: 0%;"></div>
+            </div>
           </div>
+
+          <div class="themes-unlock-grid" id="settings-themes-grid"></div>
+
+          <div id="settings-custom-theme-panel" class="custom-theme-panel hidden">
+            <div class="custom-theme-panel-head">
+              <strong>Studio Perso — Crée ton propre thème</strong>
+              <span class="caption">Débloqué à 3h de révision</span>
+            </div>
+            <div class="custom-theme-controls">
+              <div class="input-group">
+                <label for="custom-theme-name">Nom de ton thème</label>
+                <input type="text" id="custom-theme-name" maxlength="28" placeholder="Ex : Ambiance Bac 2026">
+              </div>
+              <div class="custom-color-row">
+                <label class="custom-color-field">
+                  <span>Couleur d'accent</span>
+                  <input type="color" id="custom-color-primary" value="#6366f1">
+                </label>
+                <label class="custom-color-field">
+                  <span>Fond principal</span>
+                  <input type="color" id="custom-color-bg" value="#0f172a">
+                </label>
+                <label class="custom-color-field">
+                  <span>Cartes</span>
+                  <input type="color" id="custom-color-card" value="#1e293b">
+                </label>
+                <label class="custom-color-field">
+                  <span>Texte</span>
+                  <input type="color" id="custom-color-ink" value="#f8fafc">
+                </label>
+              </div>
+              <div class="input-group" style="margin-top:8px;">
+                <label for="custom-theme-fx">Effet d'ambiance (façon Snap+ / Galaxy)</label>
+                <select id="custom-theme-fx">
+                  <option value="neon">Halo Néon doux</option>
+                  <option value="galaxy">Poussière d'étoiles Galaxy</option>
+                  <option value="none">Fond uni classique</option>
+                </select>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                <button type="button" class="btn-pill btn-sm" onclick="saveCustomThemeConfig()">Enregistrer &amp; Activer</button>
+                <button type="button" class="btn-ghost btn-sm" onclick="resetCustomThemeDefaults()">Réinitialiser</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-sec" id="settings-webapp-icon-sec">
+          <h3>📱 Logo de l'application web (Mobile iOS / Android)</h3>
+          <p class="setting-desc" style="margin-bottom:14px;">Personnalise l'icône qui apparaît sur l'écran d'accueil de ton téléphone (Safari « Sur l'écran d'accueil » ou Chrome « Installer l'application ») sans aucun temps de révision requis.</p>
+
+          <div class="webapp-icon-preview-box">
+            <img id="webapp-icon-live-preview" class="webapp-icon-preview-img" src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="Aperçu icône app web">
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:14px; font-weight:800; color:var(--ink);" id="webapp-icon-active-name">Logo DnB Original</div>
+              <div class="caption" id="webapp-icon-active-desc" style="margin-top:2px;">Utilisé pour l'icône d'application mobile et l'onglet du navigateur.</div>
+              <div class="caption" style="margin-top:6px; opacity:.85;">💡 Astuce mobile : après avoir choisi ton logo, ré-ajoute le raccourci sur l'écran d'accueil si ton téléphone garde l'ancien en cache.</div>
+            </div>
+          </div>
+
+          <div class="webapp-icon-grid" id="settings-webapp-icon-grid"></div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px;">
+            <input type="file" id="webapp-icon-file" accept="image/*" style="display:none;" onchange="handleCustomWebAppIconUpload(event)">
+            <button type="button" class="btn-utility btn-sm" onclick="document.getElementById('webapp-icon-file').click()">🖼️ Importer une image perso</button>
+            <button type="button" class="btn-ghost btn-sm" onclick="selectWebAppIconMode('original')">Réinitialiser par défaut</button>
+          </div>
+        </div>
+
+        <div class="settings-sec">
+          <h3>🏅 Badges d'assiduité &amp; Flairs</h3>
+          <p class="setting-desc" style="margin-bottom:12px;">Gagne des badges grâce à ton temps de révision et ta série de flammes, puis affiche ton préféré sur ton profil.</p>
+          <div class="badges-unlock-grid" id="settings-badges-grid"></div>
+        </div>
+
+        <div class="settings-sec">
+          <h3>⚙️ Options d'interface</h3>
           <div class="setting-row">
             <div>
               <div class="setting-label">Animations et transitions</div>
@@ -716,7 +886,7 @@
             </label>
           </div>
         </div>
-        
+
         <div class="settings-sec">
           <h3>📧 Notifications Email</h3>
           <div class="setting-row">
@@ -751,19 +921,6 @@
             <input type="password" id="setting-pwd" placeholder="Nouveau mot de passe">
           </div>
           <button class="btn-pill" onclick="changePassword()">Mettre à jour</button>
-        </div>
-
-        <div class="settings-sec">
-          <h3>📦 Téléchargement du projet</h3>
-          <p class="setting-desc" style="margin-bottom:12px;">Télécharge l'archive complète du code source mis à jour ou uniquement les fichiers modifiés.</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a href="/download/zip" class="btn-pill" style="text-decoration:none; padding:10px 18px; font-size:13px;" download="dnb-reviz-complet.zip">
-              📥 Télécharger tout le projet (ZIP)
-            </a>
-            <a href="/download/modified" class="btn-pill-van" style="text-decoration:none; padding:10px 18px; font-size:13px;" download="dnb-reviz-fichiers-modifies.zip">
-              📄 Télécharger les fichiers modifiés seuls (ZIP)
-            </a>
-          </div>
         </div>
       </div>
     </section>
@@ -900,89 +1057,124 @@
     <section id="page-statistiques" class="page-view admin-only hidden">
       <div class="stats-hero">
         <div class="stats-hero-main">
-          <div class="stats-eyebrow"><span class="stats-live-dot"></span> Espace administrateur</div>
+          <div class="stats-hero-top-row">
+            <div class="stats-eyebrow"><span class="stats-live-dot"></span> Espace administrateur</div>
+            <span class="stats-status-pill" id="stats-hero-period-pill">Vue consolidée · DnB Reviz</span>
+          </div>
           <div class="ph-row stats-title-row">
             <div>
               <h1>Statistiques</h1>
-              <p class="tagline">Comprends l'activité de DnB Reviz en un coup d'œil.</p>
+              <p class="tagline">Pilotage complet, ajouts personnalisés et rapports PDF stylisés de DnB Reviz.</p>
             </div>
             <div class="stats-toolbar">
               <div class="stats-range-wrap">
-                <span>Analyse</span>
+                <span>Période</span>
                 <select id="stats-range" class="stats-select" onchange="loadStatisticsDashboard()">
                   <option value="1">Aujourd’hui</option>
                   <option value="7" selected>7 jours</option>
                   <option value="30">30 jours</option>
                   <option value="90">90 jours</option>
+                  <option value="3650">Tout l'historique</option>
                 </select>
               </div>
+              <div class="stats-range-wrap">
+                <span>Rôle</span>
+                <select id="stats-role-filter" class="stats-select" onchange="loadStatisticsDashboard()">
+                  <option value="all" selected>Tous les rôles</option>
+                  <option value="élève">Élèves</option>
+                  <option value="professeur">Professeurs</option>
+                  <option value="admin">Admins</option>
+                </select>
+              </div>
+              <button class="btn-ghost stats-export-btn" type="button" onclick="openStatsAddDataModal()">＋ Ajouter des données</button>
               <button class="btn-ghost stats-export-btn" type="button" onclick="exportStatisticsJSON()">↧ JSON</button>
-              <button class="btn-pill stats-export-btn" type="button" onclick="exportStatisticsPDF()">↧ PDF</button>
+              <button class="btn-pill stats-export-btn" type="button" onclick="openStatsPdfModal()">📄 PDF stylisé</button>
+              <button class="btn-ghost stats-export-btn" type="button" title="Actualiser" onclick="loadStatisticsDashboard()">↻</button>
             </div>
+          </div>
+          <div class="stats-subnav" role="tablist" aria-label="Sections statistiques">
+            <button type="button" class="stats-subtab active" data-tab="all" onclick="switchStatsSubtab('all', this)">Toutes les vues</button>
+            <button type="button" class="stats-subtab" data-tab="charts" onclick="switchStatsSubtab('charts', this)">Graphiques</button>
+            <button type="button" class="stats-subtab" data-tab="custom" onclick="switchStatsSubtab('custom', this)">Données perso</button>
+            <button type="button" class="stats-subtab" data-tab="rankings" onclick="switchStatsSubtab('rankings', this)">Classements & Utilisateurs</button>
           </div>
           <div class="stats-hero-note">
             <div class="stats-note-icon">⌁</div>
-            <div><strong>Vue privée ADMIN</strong><span>Les identifiants détaillés restent dans les données internes de ton site. Google Analytics ne reçoit pas ces identifiants.</span></div>
+            <div><strong>Vue privée ADMIN</strong><span>Suivi temps réel, temps de révision cumulé et indicateurs manuels exportables en rapport PDF mis en page.</span></div>
           </div>
         </div>
         <div class="stats-hero-orb stats-orb-one"></div>
         <div class="stats-hero-orb stats-orb-two"></div>
       </div>
 
-      <div class="stats-kpi-grid">
-        <div class="stats-kpi-card stats-kpi-primary"><span class="stats-kpi-icon">👥</span><div><div class="caption">Utilisateurs connus</div><strong id="stats-kpi-users">0</strong><small>comptes suivis</small></div></div>
-        <div class="stats-kpi-card"><span class="stats-kpi-icon">◷</span><div><div class="caption">Sessions</div><strong id="stats-kpi-sessions">0</strong><small>sur la période</small></div></div>
-        <div class="stats-kpi-card"><span class="stats-kpi-icon">↗</span><div><div class="caption">Connexions</div><strong id="stats-kpi-logins">0</strong><small>entrées enregistrées</small></div></div>
-        <div class="stats-kpi-card"><span class="stats-kpi-icon">⌁</span><div><div class="caption">Pic de connexions</div><strong id="stats-kpi-peak">0</strong><small>au même moment</small></div></div>
-        <div class="stats-kpi-card stats-kpi-live"><span class="stats-kpi-icon"><i></i></span><div><div class="caption">Connectés maintenant</div><strong id="stats-kpi-live">0</strong><small>activité récente</small></div></div>
-        <div class="stats-kpi-card"><span class="stats-kpi-icon">▤</span><div><div class="caption">Pages vues</div><strong id="stats-kpi-views">0</strong><small>navigations internes</small></div></div>
-      </div>
-
-      <div class="stats-grid-2 stats-chart-grid-main">
-        <div class="stats-card stats-card-chart stats-card-featured">
-          <div class="stats-card-head">
-            <div><span class="stats-section-label">FRÉQUENTATION</span><h3>Connexions par heure</h3><p class="caption">Quand les utilisateurs se connectent le plus.</p></div>
-            <span class="stats-card-badge">24 h</span>
-          </div>
-          <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-hourly-chart"></canvas></div>
-        </div>
-        <div class="stats-card stats-card-chart">
-          <div class="stats-card-head">
-            <div><span class="stats-section-label">PRÉSENCE</span><h3>Utilisateurs connectés</h3><p class="caption">Estimation à partir des sessions actives et du heartbeat.</p></div>
-            <span class="stats-card-badge stats-card-badge-soft">live</span>
-          </div>
-          <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-concurrent-chart"></canvas></div>
+      <div data-stats-section="overview">
+        <div class="stats-kpi-grid">
+          <div class="stats-kpi-card stats-kpi-primary" style="--kpi-accent:#4f46e5;"><span class="stats-kpi-icon">👥</span><div><div class="caption">Utilisateurs connus</div><strong id="stats-kpi-users">0</strong><small>comptes suivis</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#0284c7;"><span class="stats-kpi-icon">◷</span><div><div class="caption">Sessions</div><strong id="stats-kpi-sessions">0</strong><small>sur la période</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#7c3aed;"><span class="stats-kpi-icon">↗</span><div><div class="caption">Connexions</div><strong id="stats-kpi-logins">0</strong><small>entrées enregistrées</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#d97706;"><span class="stats-kpi-icon">⌁</span><div><div class="caption">Pic de connexions</div><strong id="stats-kpi-peak">0</strong><small>au même moment</small></div></div>
+          <div class="stats-kpi-card stats-kpi-live" style="--kpi-accent:#10b981;"><span class="stats-kpi-icon"><i></i></span><div><div class="caption">Connectés maintenant</div><strong id="stats-kpi-live">0</strong><small>activité récente</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#ec4899;"><span class="stats-kpi-icon">▤</span><div><div class="caption">Pages vues</div><strong id="stats-kpi-views">0</strong><small>navigations internes</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#14b8a6;"><span class="stats-kpi-icon">⏱</span><div><div class="caption">Temps total révisé</div><strong id="stats-kpi-study-time">0 min</strong><small>cumulé sur le site</small></div></div>
+          <div class="stats-kpi-card" style="--kpi-accent:#f59e0b;"><span class="stats-kpi-icon">📚</span><div><div class="caption">Contenus & entrées</div><strong id="stats-kpi-contents">0</strong><small>cours, quiz & ajouts</small></div></div>
         </div>
       </div>
 
-      <div class="stats-grid-2">
-        <div class="stats-card stats-card-chart">
-          <div class="stats-card-head">
-            <div><span class="stats-section-label">ÉVOLUTION</span><h3>Activité par jour</h3><p class="caption">Sessions et pages vues sur la période.</p></div>
+      <div data-stats-section="charts">
+        <div class="stats-grid-2 stats-chart-grid-main">
+          <div class="stats-card stats-card-chart stats-card-featured">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">FRÉQUENTATION</span><h3>Connexions par heure</h3><p class="caption">Quand les utilisateurs se connectent le plus.</p></div>
+              <span class="stats-card-badge">24 h</span>
+            </div>
+            <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-hourly-chart"></canvas></div>
           </div>
-          <div class="stats-chart-wrap"><canvas id="stats-daily-chart"></canvas></div>
+          <div class="stats-card stats-card-chart">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">PRÉSENCE</span><h3>Utilisateurs connectés</h3><p class="caption">Estimation à partir des sessions actives et du heartbeat.</p></div>
+              <span class="stats-card-badge stats-card-badge-soft">live</span>
+            </div>
+            <div class="stats-chart-wrap stats-chart-tall"><canvas id="stats-concurrent-chart"></canvas></div>
+          </div>
         </div>
-        <div class="stats-card stats-card-chart">
-          <div class="stats-card-head">
-            <div><span class="stats-section-label">PROFIL</span><h3>Répartition des utilisateurs</h3><p class="caption">Rôles présents dans la base suivie.</p></div>
-          </div>
-          <div class="stats-split-chart">
-            <div class="stats-doughnut-wrap"><canvas id="stats-role-chart"></canvas><div class="stats-doughnut-center"><strong id="stats-role-total">0</strong><span>profils</span></div></div>
-            <div id="stats-role-legend" class="stats-legend"></div>
-          </div>
-        </div>
-      </div>
 
-      <div class="stats-grid-2">
-        <div class="stats-card stats-card-chart">
-          <div class="stats-card-head">
-            <div><span class="stats-section-label">APPAREILS</span><h3>Appareils utilisés</h3><p class="caption">Mobile, tablette ou ordinateur.</p></div>
+        <div class="stats-grid-2">
+          <div class="stats-card stats-card-chart">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">ÉVOLUTION</span><h3>Activité par jour</h3><p class="caption">Sessions et pages vues sur la période.</p></div>
+            </div>
+            <div class="stats-chart-wrap"><canvas id="stats-daily-chart"></canvas></div>
           </div>
-          <div class="stats-split-chart stats-split-chart-device">
-            <div class="stats-doughnut-wrap"><canvas id="stats-device-chart"></canvas></div>
-            <div id="stats-device-legend" class="stats-legend"></div>
+          <div class="stats-card stats-card-chart">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">PROFIL</span><h3>Répartition des utilisateurs</h3><p class="caption">Rôles présents dans la base suivie.</p></div>
+            </div>
+            <div class="stats-split-chart">
+              <div class="stats-doughnut-wrap"><canvas id="stats-role-chart"></canvas><div class="stats-doughnut-center"><strong id="stats-role-total">0</strong><span>profils</span></div></div>
+              <div id="stats-role-legend" class="stats-legend"></div>
+            </div>
           </div>
         </div>
+
+        <div class="stats-grid-2">
+          <div class="stats-card stats-card-chart">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">PÉDAGOGIE</span><h3>Répartition des contenus</h3><p class="caption">Cours, fiches, quiz classiques, quiz IA et données perso.</p></div>
+              <span class="stats-card-badge">base</span>
+            </div>
+            <div class="stats-chart-wrap"><canvas id="stats-content-chart"></canvas></div>
+          </div>
+          <div class="stats-card stats-card-chart">
+            <div class="stats-card-head">
+              <div><span class="stats-section-label">APPAREILS</span><h3>Appareils utilisés</h3><p class="caption">Mobile, tablette ou ordinateur.</p></div>
+            </div>
+            <div class="stats-split-chart stats-split-chart-device">
+              <div class="stats-doughnut-wrap"><canvas id="stats-device-chart"></canvas></div>
+              <div id="stats-device-legend" class="stats-legend"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="stats-card">
           <div class="stats-card-head">
             <div><span class="stats-section-label">LOCALISATION APPROXIMATIVE</span><h3>Zones / fuseaux horaires</h3><p class="caption">Lieu déduit du fuseau ou de la locale du navigateur.</p></div>
@@ -992,48 +1184,99 @@
         </div>
       </div>
 
-      <div class="stats-card">
-        <div class="stats-card-head stats-users-head">
-          <div><span class="stats-section-label">DÉTAIL</span><h3>Utilisateurs & sessions</h3><p class="caption">Identifiants internes, dernière connexion et activité récente.</p></div>
-          <div class="stats-user-actions"><span class="stats-count-badge" id="stats-user-count">0 utilisateurs</span><input id="stats-user-search" class="stats-search" type="search" placeholder="Rechercher un identifiant…" oninput="renderStatisticsUsers()"></div>
-        </div>
-        <div class="stats-table-wrap">
-          <table class="stats-table">
-            <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Dernière connexion</th><th>Sessions</th><th>Dernière page</th><th>Zone</th></tr></thead>
-            <tbody id="stats-users-tbody"><tr><td colspan="6" class="stats-empty">Chargement…</td></tr></tbody>
-          </table>
+      <div data-stats-section="custom">
+        <div class="stats-card">
+          <div class="stats-card-head stats-users-head">
+            <div>
+              <span class="stats-section-label">DONNÉES PERSONNALISÉES · ADMIN</span>
+              <h3>Indicateurs & ajouts manuels</h3>
+              <p class="caption">Ajoute tes propres métriques (corrections hors-ligne, sessions classe, objectifs) et inclus-les dans le PDF.</p>
+            </div>
+            <div class="stats-user-actions">
+              <select id="stats-custom-cat-filter" class="stats-select" onchange="renderCustomStatsSection()">
+                <option value="all" selected>Toutes catégories</option>
+                <option value="Fréquentation">Fréquentation</option>
+                <option value="Pédagogie">Pédagogie</option>
+                <option value="Événement">Événement</option>
+                <option value="Correction manuelle">Correction manuelle</option>
+                <option value="Engagement">Engagement</option>
+                <option value="Autre">Autre</option>
+              </select>
+              <button class="btn-pill btn-sm" type="button" onclick="openStatsAddDataModal()">＋ Ajouter des données</button>
+            </div>
+          </div>
+
+          <div id="stats-custom-summary" class="stats-custom-summary-row"></div>
+
+          <div class="stats-chart-wrap" style="height:220px; margin-bottom:18px;">
+            <canvas id="stats-custom-chart"></canvas>
+          </div>
+
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Libellé</th>
+                  <th>Catégorie</th>
+                  <th>Valeur</th>
+                  <th>Note</th>
+                  <th>PDF</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="stats-custom-tbody">
+                <tr><td colspan="7" class="stats-empty">Aucune donnée personnalisée ajoutée pour le moment.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="stats-card" style="margin-top:20px;">
-        <div class="stats-card-head stats-users-head">
-          <div><span class="stats-section-label">TEMPS TOTAL · ADMIN</span><h3>Classement des élèves</h3><p class="caption">Temps actif cumulé sur DnB Reviz depuis la mise en place de cette collecte.</p></div>
-          <span class="stats-card-badge">cumulatif</span>
+      <div data-stats-section="rankings">
+        <div class="stats-card">
+          <div class="stats-card-head stats-users-head">
+            <div><span class="stats-section-label">DÉTAIL</span><h3>Utilisateurs & sessions</h3><p class="caption">Identifiants internes, dernière connexion et activité récente.</p></div>
+            <div class="stats-user-actions"><span class="stats-count-badge" id="stats-user-count">0 utilisateurs</span><input id="stats-user-search" class="stats-search" type="search" placeholder="Rechercher un identifiant…" oninput="renderStatisticsUsers()"></div>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Dernière connexion</th><th>Sessions</th><th>Dernière page</th><th>Zone</th></tr></thead>
+              <tbody id="stats-users-tbody"><tr><td colspan="6" class="stats-empty">Chargement…</td></tr></tbody>
+            </table>
+          </div>
         </div>
-        <div class="stats-table-wrap">
-          <table class="stats-table">
-            <thead><tr><th>Rang</th><th>Élève</th><th>Temps total</th><th>Sessions</th><th>Pages</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Dernière activité</th></tr></thead>
-            <tbody id="stats-lifetime-ranking-tbody"><tr><td colspan="8" class="stats-empty">Chargement…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
 
-      <div class="stats-card" style="margin-top:20px;">
-        <div class="stats-card-head stats-users-head">
-          <div><span class="stats-section-label">ACTIVITÉ · PÉRIODE</span><h3>Engagement par élève</h3><p class="caption">Temps actif, navigation, quiz et interactions enregistrées sur la période sélectionnée.</p></div>
-          <div class="stats-user-actions"><input id="stats-activity-search" class="stats-search" type="search" placeholder="Rechercher un élève…" oninput="renderActivityRanking()"></div>
+        <div class="stats-card" style="margin-top:20px;">
+          <div class="stats-card-head stats-users-head">
+            <div><span class="stats-section-label">TEMPS TOTAL · ADMIN</span><h3>Classement des élèves</h3><p class="caption">Temps actif cumulé sur DnB Reviz depuis la mise en place de cette collecte.</p></div>
+            <span class="stats-card-badge">cumulatif</span>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead><tr><th>Rang</th><th>Élève</th><th>Temps total</th><th>Sessions</th><th>Pages</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Dernière activité</th></tr></thead>
+              <tbody id="stats-lifetime-ranking-tbody"><tr><td colspan="8" class="stats-empty">Chargement…</td></tr></tbody>
+            </table>
+          </div>
         </div>
-        <div class="stats-table-wrap">
-          <table class="stats-table">
-            <thead><tr><th>Rang</th><th>Élève</th><th>Temps</th><th>Sessions</th><th>Pages</th><th>Quiz démarrés</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Recherches</th><th>Dernière activité</th></tr></thead>
-            <tbody id="stats-activity-ranking-tbody"><tr><td colspan="10" class="stats-empty">Chargement…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
 
-      <div class="stats-card">
-        <div class="stats-card-head"><div><span class="stats-section-label">NAVIGATION</span><h3>Pages les plus consultées</h3><p class="caption">Les écrans les plus visités sur la période sélectionnée.</p></div></div>
-        <div id="stats-pages" class="stats-pages-grid"></div>
+        <div class="stats-card" style="margin-top:20px;">
+          <div class="stats-card-head stats-users-head">
+            <div><span class="stats-section-label">ACTIVITÉ · PÉRIODE</span><h3>Engagement par élève</h3><p class="caption">Temps actif, navigation, quiz et interactions enregistrées sur la période sélectionnée.</p></div>
+            <div class="stats-user-actions"><input id="stats-activity-search" class="stats-search" type="search" placeholder="Rechercher un élève…" oninput="renderActivityRanking()"></div>
+          </div>
+          <div class="stats-table-wrap">
+            <table class="stats-table">
+              <thead><tr><th>Rang</th><th>Élève</th><th>Temps</th><th>Sessions</th><th>Pages</th><th>Quiz démarrés</th><th>Quiz terminés</th><th>Quiz IA générés</th><th>Recherches</th><th>Dernière activité</th></tr></thead>
+              <tbody id="stats-activity-ranking-tbody"><tr><td colspan="10" class="stats-empty">Chargement…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="stats-card">
+          <div class="stats-card-head"><div><span class="stats-section-label">NAVIGATION</span><h3>Pages les plus consultées</h3><p class="caption">Les écrans les plus visités sur la période sélectionnée.</p></div></div>
+          <div id="stats-pages" class="stats-pages-grid"></div>
+        </div>
       </div>
 
       <div class="stats-footer-row"><p id="stats-status" class="caption"></p><button class="btn-ghost btn-sm" type="button" onclick="loadStatisticsDashboard()">↻ Actualiser</button></div>
@@ -1428,21 +1671,10 @@
     <p class="caption" style="margin-top:-8px; margin-bottom:20px;">L'IA spécialisée va générer un entraînement sur-mesure basé sur ton programme et tes vrais documents de cours.</p>
 
     <div style="display:flex; flex-direction:column; gap:16px;">
-      <!-- Matière -->
+      <!-- Matière (dynamique depuis Firebase + Autre) -->
       <div class="input-group">
         <label for="ex-create-subject">Matière *</label>
         <select id="ex-create-subject" onchange="handleExerciceSubjectChange(event)">
-          <option value="Mathématiques">📐 Mathématiques</option>
-          <option value="Français">📚 Français &amp; Littérature</option>
-          <option value="Histoire-Géographie">🌍 Histoire-Géographie &amp; EMC</option>
-          <option value="Physique-Chimie">🔬 Physique-Chimie</option>
-          <option value="SVT">🧬 SVT (Sciences de la Vie et de la Terre)</option>
-          <option value="Anglais">🇬🇧 Anglais</option>
-          <option value="Espagnol">🇪🇸 Espagnol</option>
-          <option value="Philosophie">💭 Philosophie</option>
-          <option value="SES">📊 SES (Sciences Économiques &amp; Sociales)</option>
-          <option value="NSI">💻 NSI (Numérique et Sciences Informatiques)</option>
-          <option value="Technologie">⚙️ Technologie</option>
           <option value="autre">✏️ Autre (matière personnalisée)...</option>
         </select>
         <div id="ex-create-subject-other-wrap" style="display:none; margin-top:8px;">
@@ -1500,9 +1732,55 @@
         </div>
       </div>
 
+      <!-- Format d'exercice -->
+      <div class="input-group">
+        <label>Format des exercices générés *</label>
+        <div class="ex-type-grid" id="ex-type-grid">
+          <button type="button" class="ex-type-card active" data-ex-type="mix" onclick="selectExerciceFormat('mix')">
+            <strong>Mix complet</strong>
+            <span>Questions, reliage, QCM &amp; graphique SVG</span>
+          </button>
+          <button type="button" class="ex-type-card" data-ex-type="questions" onclick="selectExerciceFormat('questions')">
+            <strong>Questions rédigées</strong>
+            <span>Contrôle classique à rédaction libre</span>
+          </button>
+          <button type="button" class="ex-type-card" data-ex-type="matching" onclick="selectExerciceFormat('matching')">
+            <strong>Reliage interactif</strong>
+            <span>Associations de notions &amp; formules</span>
+          </button>
+          <button type="button" class="ex-type-card" data-ex-type="graph" onclick="selectExerciceFormat('graph')">
+            <strong>Graphique &amp; Schéma</strong>
+            <span>Analyse de visuels SVG interactifs</span>
+          </button>
+          <button type="button" class="ex-type-card" data-ex-type="qcm_open" onclick="selectExerciceFormat('qcm_open')">
+            <strong>QCM + Justification</strong>
+            <span>Choix multiples et argumentations</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sévérité du correcteur IA -->
+      <div class="input-group">
+        <label>Niveau de correction du professeur IA *</label>
+        <div class="ex-tone-grid" id="ex-create-tone-grid">
+          <button type="button" class="ex-tone-card" data-tone="strict" onclick="selectGradingTone('strict')">
+            <strong>Sévère</strong>
+            <span>Aucune tolérance, unités &amp; rigueur strictes</span>
+          </button>
+          <button type="button" class="ex-tone-card active" data-tone="bac" onclick="selectGradingTone('bac')">
+            <strong>Comme au Bac</strong>
+            <span>Barème officiel juste et impartial</span>
+          </button>
+          <button type="button" class="ex-tone-card" data-tone="kind" onclick="selectGradingTone('kind')">
+            <strong>Gentil (sans excès)</strong>
+            <span>Bienveillant mais honnête sur les points</span>
+          </button>
+        </div>
+      </div>
+
       <div class="input-group">
         <label for="ex-create-details">Consignes ou exigences particulières pour l'IA (facultatif)</label>
-        <textarea id="ex-create-details" rows="2" placeholder="Ex : Insister sur la démonstration rédigée, inclure un problème concret de la vie quotidienne, barème sévère sur les unités..."></textarea>
+        <textarea id="ex-create-details" rows="2" placeholder="Ex : Insister sur la démonstration rédigée, inclure un problème concret de la vie quotidienne..."></textarea>
       </div>
 
       <!-- Chronomètre personnalisable (jusqu'à 4h max) -->
@@ -1664,6 +1942,25 @@
         <div class="caption" id="self-eval-confidence-text" style="font-size:12px; margin-top:4px;">Assez confiant (4/5)</div>
       </div>
 
+      <!-- Niveau de correction du prof IA -->
+      <div class="input-group">
+        <label>Niveau d'exigence du correcteur IA</label>
+        <div class="ex-tone-grid" id="self-eval-tone-grid">
+          <button type="button" class="ex-tone-card" data-tone="strict" onclick="selectGradingTone('strict')">
+            <strong>Sévère</strong>
+            <span>Strict, aucun cadeau</span>
+          </button>
+          <button type="button" class="ex-tone-card active" data-tone="bac" onclick="selectGradingTone('bac')">
+            <strong>Comme au Bac</strong>
+            <span>Barème officiel</span>
+          </button>
+          <button type="button" class="ex-tone-card" data-tone="kind" onclick="selectGradingTone('kind')">
+            <strong>Bienveillant</strong>
+            <span>Gentil mais juste</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Commentaires & ressentis -->
       <div class="input-group">
         <label for="self-eval-reflections">Tes impressions sur ton travail (facultatif)</label>
@@ -1730,17 +2027,20 @@
       </div>
     </div>
 
-    <!-- Professor Appreciation Card -->
+    <!-- Professor Appreciation & Bulletin Card -->
     <div class="ex-appreciation-box mt-3">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
         <span style="font-size:20px;">👨‍🏫</span>
-        <h3 style="margin:0; font-size:16px;">Appréciation générale du professeur</h3>
-        <span class="ex-badge-soft" style="margin-left:auto;">Neutre &amp; Exigeant</span>
+        <h3 style="margin:0; font-size:16px;">Appréciation générale &amp; Bulletin</h3>
+        <span class="ex-badge-soft" id="ex-result-tone-badge" style="margin-left:auto;">Comme au Bac</span>
       </div>
-      <p id="ex-result-appreciation" style="margin:0; font-size:14px; line-height:1.6; color:var(--ink); font-style:italic;">
+      <div class="ex-bulletin-stamp" id="ex-result-bulletin-box">
+        <span class="ex-bulletin-label">Appréciation du bulletin :</span>
+        <span id="ex-result-bulletin">Travail sérieux et méthodique.</span>
+      </div>
+      <p id="ex-result-appreciation" style="margin:10px 0 0 0; font-size:14px; line-height:1.6; color:var(--ink); font-style:italic;">
         Appréciation détaillée...
       </p>
-
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px;">
         <div class="ex-strengths-box">
           <div style="font-weight:700; font-size:13px; color:#248a3d; margin-bottom:6px;">✓ Points forts démontrés :</div>
@@ -1753,9 +2053,16 @@
       </div>
     </div>
 
-    <!-- Questions Detailed Corrections -->
+    <!-- Questions Detailed Corrections (Mode Copie d'examen + Stylo rouge) -->
     <div style="margin-top:24px;">
-      <h3 style="margin:0 0 12px 0; font-size:17px;">Détail de la correction question par question</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:17px;">Copie d'examen &amp; Correction stylo rouge</h3>
+        <div class="ex-ann-legend">
+          <span class="ex-ann-legend-ok">Juste</span>
+          <span class="ex-ann-legend-imp">À préciser</span>
+          <span class="ex-ann-legend-err">Erreur</span>
+        </div>
+      </div>
       <div id="ex-result-questions-container" style="display:flex; flex-direction:column; gap:16px;">
         <!-- Filled dynamically -->
       </div>
@@ -1782,16 +2089,6 @@
         <label>Matière</label>
         <select id="ex-filter-modal-subject">
           <option value="all">Toutes les matières</option>
-          <option value="Mathématiques">Mathématiques</option>
-          <option value="Français">Français</option>
-          <option value="Histoire-Géographie">Histoire-Géographie</option>
-          <option value="Physique-Chimie">Physique-Chimie</option>
-          <option value="SVT">SVT</option>
-          <option value="Anglais">Anglais</option>
-          <option value="Espagnol">Espagnol</option>
-          <option value="Philosophie">Philosophie</option>
-          <option value="SES">SES</option>
-          <option value="NSI">NSI</option>
           <option value="autre">Autre</option>
         </select>
       </div>
@@ -1812,9 +2109,672 @@
   </div>
 </div>
 
+<!-- Modal: Objectif quotidien & Boucliers de flamme -->
+<div id="m-daily-goal" class="moverlay" onclick="closeOnOut(event, 'm-daily-goal')">
+  <div class="mbox" style="max-width:480px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:21px;">🎯 Objectif quotidien &amp; Boucliers</h2>
+      <button class="btn-ghost btn-sm" onclick="closeModal('m-daily-goal')">✕</button>
+    </div>
+    <p class="caption" style="margin-bottom:16px;">Fixe ton rythme de révision journalier et protège ta série grâce aux boucliers de flamme.</p>
+
+    <div class="input-group" style="margin-bottom:16px;">
+      <label>Temps de révision visé chaque jour</label>
+      <div class="daily-goal-options" id="daily-goal-options">
+        <button type="button" class="daily-goal-opt" data-mins="10" onclick="setDailyGoalMinutes(10)">10 min</button>
+        <button type="button" class="daily-goal-opt" data-mins="15" onclick="setDailyGoalMinutes(15)">15 min</button>
+        <button type="button" class="daily-goal-opt" data-mins="30" onclick="setDailyGoalMinutes(30)">30 min</button>
+        <button type="button" class="daily-goal-opt" data-mins="45" onclick="setDailyGoalMinutes(45)">45 min</button>
+        <button type="button" class="daily-goal-opt" data-mins="60" onclick="setDailyGoalMinutes(60)">1 heure</button>
+      </div>
+    </div>
+
+    <div class="shield-info-box">
+      <div class="shield-info-head">
+        <span>🛡️ Boucliers de gel de flamme</span>
+        <strong id="modal-shield-count">0 / 3</strong>
+      </div>
+      <p class="caption" style="margin:6px 0 0 0; line-height:1.5;">
+        Un bouclier protège automatiquement ta série si tu manques 1 journée complète. Tu gagnes <strong>+1 bouclier</strong> tous les <strong>2 jours de série</strong> ou tous les <strong>5 exercices IA réussis</strong> (note ≥ 10/20).
+      </p>
+    </div>
+
+    <div class="mact mt-3">
+      <button class="btn-pill" onclick="closeModal('m-daily-goal')">Valider</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ajouter une donnée statistique personnalisée -->
+<div id="m-stats-add-data" class="moverlay" onclick="closeOnOut(event, 'm-stats-add-data')">
+  <div class="mbox" style="max-width:520px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:21px;">＋ Ajouter une donnée statistique</h2>
+      <button class="btn-ghost btn-sm" type="button" onclick="closeModal('m-stats-add-data')">✕</button>
+    </div>
+    <p class="caption" style="margin-bottom:14px;">Enregistre un indicateur personnalisé (ex : élèves présents en atelier, devoirs corrigés, événement). Il sera sauvegardé et intégrable au rapport PDF.</p>
+
+    <div class="input-group">
+      <label for="stat-custom-label">Libellé de l'indicateur *</label>
+      <input id="stat-custom-label" type="text" placeholder="Ex : Atelier révision Maths, Copies corrigées...">
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="input-group">
+        <label for="stat-custom-category">Catégorie</label>
+        <select id="stat-custom-category">
+          <option value="Fréquentation">Fréquentation</option>
+          <option value="Pédagogie">Pédagogie</option>
+          <option value="Événement">Événement</option>
+          <option value="Correction manuelle">Correction manuelle</option>
+          <option value="Engagement">Engagement</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label for="stat-custom-date">Date</label>
+        <input id="stat-custom-date" type="date">
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="input-group">
+        <label for="stat-custom-value">Valeur numérique *</label>
+        <input id="stat-custom-value" type="number" step="any" placeholder="Ex : 42">
+      </div>
+      <div class="input-group">
+        <label for="stat-custom-unit">Unité</label>
+        <input id="stat-custom-unit" type="text" placeholder="élèves, pts, %, h...">
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label for="stat-custom-note">Note ou commentaire (optionnel)</label>
+      <textarea id="stat-custom-note" rows="2" placeholder="Précisions visibles dans le tableau et le rapport PDF..."></textarea>
+    </div>
+
+    <label class="stats-pdf-check" style="margin-top:4px;">
+      <input id="stat-custom-include-pdf" type="checkbox" checked>
+      <span>Inclure automatiquement cette donnée dans les exports PDF</span>
+    </label>
+
+    <div class="mact mt-3">
+      <button class="btn-ghost" type="button" onclick="closeModal('m-stats-add-data')">Annuler</button>
+      <button class="btn-pill" type="button" onclick="saveCustomStatEntry()">Enregistrer la donnée</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Configuration de l'export PDF stylisé -->
+<div id="m-stats-pdf-export" class="moverlay" onclick="closeOnOut(event, 'm-stats-pdf-export')">
+  <div class="mbox" style="max-width:560px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-size:21px;">📄 Export PDF stylisé</h2>
+      <button class="btn-ghost btn-sm" type="button" onclick="closeModal('m-stats-pdf-export')">✕</button>
+    </div>
+    <p class="caption" style="margin-bottom:14px;">Génère un rapport A4 mis en page avec en-tête DnB Reviz, cartes KPI, graphiques haute définition et tableaux structurés.</p>
+
+    <div class="input-group">
+      <label for="pdf-report-title">Titre du rapport</label>
+      <input id="pdf-report-title" type="text" value="DnB Reviz — Rapport Statistiques & Activité">
+    </div>
+
+    <div class="input-group">
+      <label for="pdf-report-subtitle">Sous-titre</label>
+      <input id="pdf-report-subtitle" type="text" value="Bilan administrateur consolidé · Suivi des révisions et de l'engagement">
+    </div>
+
+    <div class="input-group">
+      <label for="pdf-report-note">Note de synthèse / Observation de l'admin (optionnel)</label>
+      <textarea id="pdf-report-note" rows="3" placeholder="Ex : Hausse des révisions avant les épreuves blanches, très bonne participation en mathématiques..."></textarea>
+    </div>
+
+    <div class="input-group">
+      <label>Blocs à inclure dans le PDF</label>
+      <div class="stats-pdf-check-grid">
+        <label class="stats-pdf-check"><input id="pdf-inc-kpis" type="checkbox" checked><span>Cartes KPI principales</span></label>
+        <label class="stats-pdf-check"><input id="pdf-inc-charts" type="checkbox" checked><span>Graphiques haute qualité</span></label>
+        <label class="stats-pdf-check"><input id="pdf-inc-custom" type="checkbox" checked><span>Données personnalisées</span></label>
+        <label class="stats-pdf-check"><input id="pdf-inc-ranking" type="checkbox" checked><span>Top Élèves (temps cumulé)</span></label>
+        <label class="stats-pdf-check"><input id="pdf-inc-pages" type="checkbox" checked><span>Pages les plus consultées</span></label>
+        <label class="stats-pdf-check"><input id="pdf-inc-users" type="checkbox" checked><span>Détail utilisateurs & sessions</span></label>
+      </div>
+    </div>
+
+    <div class="mact mt-3">
+      <button class="btn-ghost" type="button" onclick="closeModal('m-stats-pdf-export')">Annuler</button>
+      <button class="btn-pill" type="button" onclick="generateStylizedStatisticsPDF()">📄 Générer le PDF stylisé</button>
+    </div>
+  </div>
+</div>
+
+<!-- Discrete Cookie Preferences Trigger (Easter Egg Cookie Clicker) -->
+<button type="button" id="dnb-cookie-easter-trigger" class="dnb-cookie-trigger" onclick="openCookieClickerEasterEgg()" title="Préférences des cookies" aria-label="Préférences des cookies">🍪</button>
+
+<!-- Cookie Clicker Easter Egg Overlay (DnB Reviz DA + Firebase index 76) -->
+<div id="cc-easter-modal" class="cc-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="cc-header-title">
+  <div id="cc-ban-screen" class="cc-ban-screen hidden">
+    <div class="cc-ban-card">
+      <div style="font-size:44px;margin-bottom:10px;">🚫</div>
+      <h2>Accès refusé</h2>
+      <p class="caption" style="margin:8px 0 20px;">Ce compte Cookie Clicker a été placé sur liste noire par l'administrateur.</p>
+      <button type="button" class="btn-pill" id="cc-btn-ban-logout">Déconnexion &amp; réinitialiser</button>
+    </div>
+  </div>
+
+  <div class="cc-shell">
+    <header class="cc-topbar">
+      <div class="cc-topbar-left">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/DnB_website.png" alt="DnB" class="cc-topbar-logo">
+        <div>
+          <div class="cc-topbar-title" id="cc-header-title">DnB Cookie Studio</div>
+          <div class="cc-topbar-sub">Lié à ton compte &amp; tes révisions DnB Reviz</div>
+        </div>
+      </div>
+
+      <div class="cc-topbar-center">
+        <div class="cc-reviz-link-pill" id="cc-reviz-bonus-pill" title="Temps de révision et série DnB Reviz convertis en bonus">
+          <span>🔥</span>
+          <span id="cc-reviz-bonus-text">Bonus Révision : +0%</span>
+        </div>
+        <select id="cc-theme-quick-select" class="cc-theme-select" aria-label="Thème de l'application" onchange="window.applyThemeById(this.value)">
+          <option value="light">Clair Classique</option>
+          <option value="dark">Sombre Standard</option>
+          <option value="paper">Clair Papier</option>
+          <option value="oled">Sombre OLED</option>
+          <option value="aurora">Aurore Snap+</option>
+          <option value="galaxy">Galaxy Nébuleuse</option>
+          <option value="cyber">Néon Cyber+</option>
+          <option value="sunset">Sunset Doré+</option>
+          <option value="custom">Studio Perso+</option>
+        </select>
+      </div>
+
+      <div class="cc-topbar-right">
+        <button type="button" class="btn-ghost btn-sm hidden" id="cc-btn-open-admin">🛡️ Admin</button>
+        <button type="button" class="btn-ghost btn-sm hidden" id="cc-btn-gear">⚙️ Compte</button>
+        <button type="button" class="btn-pill btn-sm" onclick="closeCookieClickerEasterEgg()">← Retour aux révisions</button>
+      </div>
+    </header>
+
+    <div class="cc-nav-tabs" id="cc-nav-tabs">
+      <button type="button" class="cc-subtab active" data-cctab="game" onclick="switchCCSubTab('game')">🍪 Usine</button>
+      <button type="button" class="cc-subtab" data-cctab="wheel" onclick="switchCCSubTab('wheel')">🎡 Roue</button>
+      <button type="button" class="cc-subtab" data-cctab="comps" onclick="switchCCSubTab('comps')">🐾 Compagnons</button>
+      <button type="button" class="cc-subtab" data-cctab="trade" onclick="switchCCSubTab('trade')">🤝 Trade</button>
+      <button type="button" class="cc-subtab" data-cctab="rankings" onclick="switchCCSubTab('rankings')">🏆 Classements</button>
+      <button type="button" class="cc-subtab" data-cctab="chat" onclick="switchCCSubTab('chat')">💬 Chat <span id="cc-chat-badge" class="cc-unread-dot hidden"></span></button>
+      <button type="button" class="cc-subtab hidden" id="cc-subtab-admin" data-cctab="admin" onclick="switchCCSubTab('admin')">🛡️ Admin</button>
+    </div>
+
+    <!-- Subtab: Game -->
+    <div id="cc-tab-game" class="cc-tab-panel active">
+      <div class="cc-wrapper" id="ccWrapper">
+        <div id="cc-username-overlay" class="cc-auth-overlay">
+          <div class="cc-auth-card">
+            <div class="cc-auth-icon">🍪</div>
+            <h3>Bienvenue dans DnB Cookie</h3>
+            <p class="caption" id="cc-auth-hint">Connecte ta sauvegarde Firebase (Google, Code Secret) ou joue avec ton compte DnB Reviz.</p>
+            <button type="button" class="cc-google-btn" id="cc-btn-google-main">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="" style="width:18px;height:18px;">
+              <span>Continuer avec Google</span>
+            </button>
+            <div class="cc-auth-sep"><span>OU SANS COMPTE GOOGLE</span></div>
+            <input type="text" id="cc-username-input" class="cc-input" placeholder="Ton pseudo unique" maxlength="20">
+            <div class="cc-auth-actions">
+              <button type="button" class="btn-pill" id="cc-btn-signup">Créer un code</button>
+              <button type="button" class="btn-ghost" id="cc-btn-login-code">Connexion Code</button>
+              <button type="button" class="btn-ghost" id="cc-btn-guest">Invité</button>
+            </div>
+            <button type="button" class="btn-utility hidden" id="cc-btn-quick-dnb" style="margin-top:10px;width:100%;justify-content:center;">⚡ Continuer avec mon pseudo DnB Reviz</button>
+          </div>
+        </div>
+
+        <div class="cc-left">
+          <div class="liquid-bg-container">
+            <div class="wave wave1"></div>
+            <div class="wave wave2"></div>
+            <div class="wave wave3"></div>
+            <div class="wave wave4"></div>
+          </div>
+
+          <div class="cc-stats">
+            <div class="cc-welcome">
+              <span id="cc-player-avatar-slot"></span>
+              <span>Usine de <strong id="cc-player-name-display">…</strong></span>
+            </div>
+
+            <div class="cc-shortcuts-bar hidden" id="cc-shortcuts-bar">
+              <button type="button" class="cc-shortcut-btn" onclick="switchCCSubTab('wheel')" title="La Roue Cosmique">🎡 Roue</button>
+              <button type="button" class="cc-shortcut-btn" onclick="switchCCSubTab('comps')" title="Tes Compagnons">🐾 Compagnons</button>
+              <button type="button" class="cc-shortcut-btn" onclick="switchCCSubTab('trade')" title="Marché Noir (Trades)">🤝 Trade</button>
+            </div>
+
+            <div class="cc-cookies-count" id="cc-cookies-display">0</div>
+            <div class="cc-cps">cookies par seconde : <strong id="cc-cps-display">0</strong></div>
+            <div class="cc-cps-bonus hidden" id="cc-cps-bonus-display">+0 CpS (Bonus Classement Groupe)</div>
+            <div class="cc-click-power">puissance de clic : <strong id="cc-click-power-display">1</strong></div>
+            <div class="cc-frenzy-pill hidden" id="cc-frenzy-pill">✨ Frénésie Dorée active (Clics x2)</div>
+
+            <div class="sugar-display hidden" id="cc-sugar-ui" title="Les morceaux de sucre poussent tout seuls une fois le milliard atteint ! 1 sucre = 1 heure.">
+              <img src="https://png.pngtree.com/png-vector/20231004/ourmid/pngtree-sugar-cube-sugar-cube-png-image_10069833.png" class="sugar-icon" alt="Sucre">
+              <div class="sugar-texts">
+                <span id="cc-sugars-count">0</span>
+                <span id="cc-sugars-timer" class="sugar-timer">--:--</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cookie-container" id="cc-cookie-stage">
+            <div id="cc-orbiting-cursors" class="orbiting-cursors"></div>
+            <div id="cc-active-companion" class="cc-active-companion"></div>
+            <button type="button" class="big-cookie-btn" id="cc-big-cookie" aria-label="Cliquer sur le cookie">
+              <img src="https://png.pngtree.com/png-vector/20250425/ourmid/pngtree-chocolate-chip-cookie-icon-white-background-png-image_16100260.png" alt="Cookie" class="big-cookie-img" id="cc-main-cookie-img" draggable="false">
+            </button>
+            <div id="cc-golden-cookie" class="cc-golden-cookie hidden" title="Cookie Doré ! Clique vite !" role="button" tabindex="0" aria-label="Cookie Doré"></div>
+          </div>
+
+          <div class="cc-controls">
+            <button type="button" class="btn-pill btn-sm" id="cc-btn-save-data">💾 Sauvegarder</button>
+            <button type="button" class="btn-ghost btn-sm" id="cc-btn-show-code">🔑 Mon Code</button>
+            <button type="button" class="btn-ghost btn-sm" id="cc-btn-import-footer">📥 Importer</button>
+            <button type="button" class="btn-ghost btn-sm del" id="cc-btn-reset">🗑️ Reset Local</button>
+            <div id="cc-reminder-text" class="cc-reminder hidden">⚠️ Pense à sauvegarder tes progrès en ligne avant de quitter !</div>
+          </div>
+        </div>
+
+        <div class="cc-right">
+          <div class="buy-sell-toggle buy-sell-3">
+            <button type="button" class="bs-btn active" id="cc-btn-mode-buy">Acheter</button>
+            <button type="button" class="bs-btn" id="cc-btn-mode-sell">Vendre</button>
+            <button type="button" class="bs-btn bs-btn-trade" id="cc-btn-mode-trade">Trade 🤝</button>
+          </div>
+          <div class="cc-upgrades-header">
+            <div class="cc-section-mini-title" style="margin:0;">Améliorations</div>
+            <button type="button" class="btn-ghost btn-sm" id="cc-btn-history">📜 Voir achetés</button>
+          </div>
+          <div class="upgrades-container" id="cc-upgrades-container"></div>
+          <div class="cc-section-mini-title">Bâtiments</div>
+          <div id="cc-store-container" class="cc-store-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtab: La Roue Cosmique -->
+    <div id="cc-tab-wheel" class="cc-tab-panel">
+      <div class="cc-panel-card cc-wheel-panel">
+        <div class="cc-wheel-head">
+          <div>
+            <h3>🎡 La Roue Cosmique</h3>
+            <p class="caption">Tente ta chance pour gagner des milliards de cookies ou des compagnons exclusifs.</p>
+          </div>
+          <div class="cc-spin-timer-badge" id="cc-spin-timer-text">Tours dispo : 2/2</div>
+        </div>
+
+        <div class="cc-wheel-rules-box">
+          <h4>📜 Règles &amp; Probabilités</h4>
+          <ul>
+            <li>Chaque tour coûte <strong>5 Billions</strong> de cookies.</li>
+            <li>Tu disposes de <strong>2 tours maximum</strong>, qui se rechargent en 5 minutes.</li>
+          </ul>
+          <div class="cc-wheel-odds-grid">
+            <div class="cc-odd-item"><span>🍪 2.5B Cookies</span><strong>~47.9%</strong></div>
+            <div class="cc-odd-item"><span>🍪 7.5B Cookies</span><strong style="color:#eab308;">35%</strong></div>
+            <div class="cc-odd-item"><span>💥 AlgaZ (Épique)</span><strong style="color:var(--primary);">15%</strong></div>
+            <div class="cc-odd-item"><span>💣 Dan (Mythique)</span><strong style="color:var(--secondary);">2%</strong></div>
+            <div class="cc-odd-item"><span>✨ Dan Shiny (Secret)</span><strong style="color:var(--danger);">0.0015%</strong></div>
+            <div class="cc-odd-item"><span>🔮 Jayden (Secret)</span><strong style="color:var(--danger);">0.0003%</strong></div>
+          </div>
+        </div>
+
+        <div class="cc-wheel-cta-wrap">
+          <button type="button" class="btn-pill cc-spin-cta" id="cc-btn-spin">
+            <span style="font-size:15px;font-weight:800;">🎡 TOURNER LA ROUE</span>
+            <span style="font-size:12px;opacity:0.9;">Prix : 5 Billions</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtab: Compagnons -->
+    <div id="cc-tab-comps" class="cc-tab-panel">
+      <div class="cc-panel-card">
+        <div class="ph-row" style="margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0;">🐾 Tes Compagnons</h3>
+            <p class="caption">Clique sur un compagnon pour l'équiper (1 à la fois). Pendant une Frénésie Dorée, il frappe le cookie automatiquement !</p>
+          </div>
+        </div>
+        <div class="companion-list" id="cc-comp-list"></div>
+      </div>
+    </div>
+
+    <!-- Subtab: Marché Noir (Trades) -->
+    <div id="cc-tab-trade" class="cc-tab-panel">
+      <div class="cc-panel-card">
+        <h3 style="margin:0 0 6px;">🤝 Marché Noir (Trades)</h3>
+        <div class="cc-trade-rules-box">
+          <strong>📜 Règles de la galaxie :</strong>
+          <ul>
+            <li>Tu ne peux échanger que ce que tu <strong>possèdes</strong>.</li>
+            <li>Une fois l'échange validé par les deux joueurs, il est <strong>définitif</strong>.</li>
+            <li>Les modifications s'affichent en temps réel !</li>
+          </ul>
+        </div>
+        <div class="cc-section-mini-title" style="margin-top:14px;">Joueurs disponibles pour un échange</div>
+        <div id="cc-trade-players-list" class="cc-trade-players-list">
+          <p class="caption" style="text-align:center;">Chargement des joueurs…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtab: Leaderboards -->
+    <div id="cc-tab-rankings" class="cc-tab-panel">
+      <div class="cc-lb-grid">
+        <div class="cc-lb-card">
+          <div class="cc-lb-title">🏆 Top Cookies</div>
+          <div id="cc-lb-cookies"><p class="caption" style="text-align:center;">Chargement…</p></div>
+        </div>
+        <div class="cc-lb-card">
+          <div class="cc-lb-title">🚀 Top Vitesse (CpS)</div>
+          <div id="cc-lb-cps"><p class="caption" style="text-align:center;">Chargement…</p></div>
+        </div>
+        <div class="cc-lb-card">
+          <div class="cc-lb-title">🛡️ Top Groupes</div>
+          <div id="cc-lb-groups"><p class="caption" style="text-align:center;">Chargement…</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtab: Chat -->
+    <div id="cc-tab-chat" class="cc-tab-panel">
+      <div class="cc-chat-card">
+        <div class="cc-chat-head">
+          <strong>💬 Chat Cookie Clicker en direct</strong>
+          <span class="caption" id="cc-chat-status">Connecté à Firebase</span>
+        </div>
+        <div class="cc-chat-body" id="cc-chat-box">
+          <p class="caption" style="text-align:center;margin:auto 0;">Connecte-toi pour accéder au chat.</p>
+        </div>
+        <div class="cc-chat-input-area">
+          <input type="text" id="cc-chat-input" placeholder="Écris un message (max 80 car.)…" maxlength="80">
+          <button type="button" class="btn-pill btn-sm" id="cc-btn-send-chat">Envoyer ➤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subtab: Admin -->
+    <div id="cc-tab-admin" class="cc-tab-panel">
+      <div class="cc-admin-card">
+        <div class="ph-row" style="margin-bottom:16px;gap:8px;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0;">🛡️ Panneau d'Administration Cookie</h3>
+            <p class="caption">Gestion des groupes, sauvegardes, sucres, tours de roue, sanctions et Cookies Dorés.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button type="button" class="btn-ghost btn-sm" id="cc-btn-force-save-all" style="border-color:#eab308;color:#b45309;">⚠️ Forcer Sauvegarde Globale</button>
+            <button type="button" class="btn-ghost btn-sm" id="cc-btn-refresh-admin">↻ Actualiser</button>
+          </div>
+        </div>
+        <div class="cc-admin-groups-box">
+          <h4>👑 Gestion des Groupes</h4>
+          <div class="cc-admin-group-form">
+            <input type="text" id="cc-new-group-name" placeholder="Nom du groupe">
+            <select id="cc-new-group-color">
+              <option value="#ffffff">Blanc</option>
+              <option value="#ff5f56">Rouge</option>
+              <option value="#58a6ff">Bleu</option>
+              <option value="#27c93f">Vert</option>
+              <option value="#00FF88">Menthe</option>
+              <option value="#bc8cff">Violet</option>
+              <option value="#ffbd2e">Orange</option>
+              <option value="#ff69b4">Rose</option>
+              <option value="rainbow">Rainbow (Modé)</option>
+              <option value="golden-aura">Golden Aura (Modé)</option>
+              <option value="aura">Aura (Modé)</option>
+              <option value="dan">Dan Secret (Modé)</option>
+            </select>
+            <button type="button" class="btn-pill btn-sm" id="cc-btn-create-group">Créer le groupe</button>
+          </div>
+          <div id="cc-admin-groups-list" class="cc-admin-groups-list"></div>
+        </div>
+        <div style="overflow-x:auto; margin-top:16px;">
+          <table class="admin-table" id="cc-admin-saves-table">
+            <thead>
+              <tr><th>ID (Code)</th><th>Pseudo</th><th>Groupe</th><th>Cookies</th><th>Sucres</th><th>CpS</th><th>Actions</th></tr>
+            </thead>
+            <tbody><tr><td colspan="7">Chargement…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="cc-game-tooltip" class="cc-tooltip"></div>
+
+  <!-- Fullscreen Wheel Spin Modal -->
+  <div id="cc-wheel-modal" class="cc-wheel-modal hidden">
+    <h2 class="cc-wheel-modal-title">🎡 La Roue Cosmique</h2>
+    <p id="cc-swipe-text" class="cc-swipe-hint">👇 Glisse vers le bas (ou touche le bouton) pour tourner ! 👇</p>
+    <div class="fs-wheel-wrapper" id="cc-wheel-gesture-area">
+      <div class="fs-wheel-pointer"></div>
+      <div class="fs-wheel-scale-wrapper" id="cc-wheel-scale-wrapper">
+        <div class="fs-wheel-circle" id="cc-wheel-visual"></div>
+      </div>
+    </div>
+    <button type="button" class="btn-pill" id="cc-btn-wheel-launch" style="margin-top:16px;">🎡 Lancer la roue !</button>
+  </div>
+
+  <!-- Login (Google or Secret Code + Password) Modal -->
+  <div id="cc-login-code-modal" class="moverlay">
+    <div class="mbox" style="max-width:420px;">
+      <h3>🔑 Se Connecter</h3>
+      <button type="button" class="cc-google-btn mt-2" id="cc-btn-login-google-only">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="" style="width:18px;height:18px;">
+        <span>Continuer avec Google</span>
+      </button>
+      <div class="cc-auth-sep"><span>OU CODE SECRET</span></div>
+      <div class="input-group" id="cc-login-code-step">
+        <input type="text" id="cc-login-input-code" placeholder="Code Secret (ex: Dan-12345)">
+      </div>
+      <div class="input-group hidden" id="cc-login-pwd-step">
+        <label>Ce compte est protégé par un mot de passe</label>
+        <input type="password" id="cc-login-input-pwd" placeholder="Mot de passe">
+      </div>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost" onclick="document.getElementById('cc-login-code-modal').classList.remove('active')">Annuler</button>
+        <button type="button" class="btn-pill" id="cc-btn-submit-login">Vérifier</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upgrades History Modal -->
+  <div id="cc-history-modal" class="moverlay">
+    <div class="mbox" style="max-width:460px; max-height:82dvh; overflow-y:auto;">
+      <h3>📜 Historique d'Améliorations</h3>
+      <div id="cc-history-list" class="cc-history-list mt-2"></div>
+      <div class="mact mt-3">
+        <button type="button" class="btn-pill" onclick="document.getElementById('cc-history-modal').classList.remove('active')">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming Trade Request Modal -->
+  <div id="cc-incoming-trade-modal" class="moverlay">
+    <div class="mbox" style="max-width:420px;">
+      <h3>🤝 Demande d'échange !</h3>
+      <p class="caption mt-1" style="font-size:14px;color:var(--ink);"><strong id="cc-incoming-trade-sender">Joueur</strong> aimerait faire un trade avec toi !</p>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost del" id="cc-btn-decline-trade">Refuser</button>
+        <button type="button" class="btn-pill" id="cc-btn-accept-trade">Accepter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Trade Modal -->
+  <div id="cc-active-trade-modal" class="moverlay">
+    <div class="mbox cc-active-trade-mbox">
+      <h3>🤝 Échange avec <span id="cc-trade-target-name">…</span></h3>
+      <div class="cc-trade-columns mt-2">
+        <div class="trade-box" id="cc-my-trade-box">
+          <h4>Ton Offre</h4>
+          <div class="cc-trade-cookie-inputs">
+            <input type="number" id="cc-trade-cookies-amount" placeholder="Montant (ex: 15)" min="0" max="999">
+            <select id="cc-trade-cookies-unit">
+              <option value="1">Aucun</option>
+              <option value="1000000">Millions</option>
+              <option value="1000000000">Milliards</option>
+              <option value="1000000000000">Billions</option>
+              <option value="1000000000000000">Billiards</option>
+              <option value="1000000000000000000">Trillions</option>
+              <option value="1000000000000000000000">Quatrillion</option>
+              <option value="1000000000000000000000000">Quintillion</option>
+              <option value="1000000000000000000000000000">Sextillion</option>
+              <option value="1000000000000000000000000000000">Septillion</option>
+            </select>
+          </div>
+          <input type="hidden" id="cc-trade-my-cookies-input" value="0">
+          <div class="caption" style="margin:8px 0 4px;">Compagnons à donner :</div>
+          <div id="cc-trade-my-comps-list" class="cc-trade-my-comps"></div>
+          <label class="cc-trade-ready-label">
+            <input type="checkbox" id="cc-trade-my-ready-check">
+            <span>Je suis prêt !</span>
+          </label>
+        </div>
+
+        <div class="trade-box" id="cc-their-trade-box">
+          <h4>Son Offre</h4>
+          <div class="cc-trade-offer-card">
+            <span class="caption">Cookies proposés :</span>
+            <strong id="cc-trade-their-cookies">0</strong>
+          </div>
+          <div class="cc-trade-offer-card">
+            <span class="caption">Compagnons proposés :</span>
+            <div id="cc-trade-their-comps" style="font-weight:700;font-size:13px;margin-top:4px;">Aucun</div>
+          </div>
+          <div id="cc-trade-their-ready" class="cc-trade-status not-ready">❌ Pas prêt</div>
+        </div>
+      </div>
+
+      <div class="cc-trade-chat-wrap">
+        <div class="cc-section-mini-title" style="margin:0 0 6px;">💬 Chat privé de l'échange</div>
+        <div id="cc-trade-chat-box" class="cc-trade-chat-box"></div>
+        <div class="cc-trade-chat-send-row">
+          <input type="text" id="cc-trade-chat-input" placeholder="Message privé…" maxlength="120">
+          <button type="button" class="btn-pill btn-sm" id="cc-btn-send-trade-chat">Envoyer</button>
+        </div>
+      </div>
+
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost del" id="cc-btn-cancel-active-trade">Annuler l'échange</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (Profile Pic + Name + Password + Google Link) -->
+  <div id="cc-settings-modal" class="moverlay">
+    <div class="mbox" style="max-width:460px; max-height:88dvh; overflow-y:auto;">
+      <h3>⚙️ Paramètres du compte Cookie</h3>
+
+      <div class="cc-settings-avatar-box mt-2">
+        <label style="font-size:13px;font-weight:700;color:var(--ink);">Photo de profil</label>
+        <div class="cc-settings-avatar-row">
+          <img id="cc-preview-profile-pic" src="" alt="" class="cc-settings-avatar-preview hidden">
+          <div style="flex:1;min-width:0;">
+            <input type="text" id="cc-set-profile-pic-url" placeholder="Coller un lien d'image…" style="margin-bottom:8px;">
+            <input type="file" id="cc-set-profile-pic-file" accept="image/*" style="display:none;">
+            <label for="cc-set-profile-pic-file" class="btn-ghost btn-sm" style="display:inline-flex;width:100%;justify-content:center;cursor:pointer;">📁 Choisir une image</label>
+          </div>
+        </div>
+        <button type="button" class="btn-ghost btn-sm del hidden" id="cc-btn-remove-profile-pic" style="width:100%;margin-top:8px;">🗑️ Retirer la photo</button>
+      </div>
+
+      <div class="input-group mt-2">
+        <label>Pseudo visible par les autres</label>
+        <input type="text" id="cc-set-display-name" maxlength="20">
+      </div>
+      <div class="input-group">
+        <label>Mot de passe du code (laisser vide = aucun)</label>
+        <input type="password" id="cc-set-pwd" maxlength="20">
+      </div>
+
+      <div class="input-group" style="border-top:1px solid var(--hl);padding-top:12px;">
+        <label>Liaison de compte (Sécurité)</label>
+        <button type="button" class="cc-google-btn" id="cc-btn-link-google">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="" style="width:18px;height:18px;">
+          <span>Lier avec Google</span>
+        </button>
+      </div>
+
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost" onclick="document.getElementById('cc-settings-modal').classList.remove('active')">Fermer</button>
+        <button type="button" class="btn-pill" id="cc-btn-save-settings">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Check Modal -->
+  <div id="cc-pwd-modal" class="moverlay">
+    <div class="mbox" style="max-width:420px;">
+      <h3>🔒 Compte protégé</h3>
+      <p class="caption mt-1">Ce compte Cookie Clicker est protégé par un mot de passe.</p>
+      <div class="input-group mt-2">
+        <input type="password" id="cc-check-pwd" placeholder="Entre ton mot de passe">
+      </div>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost" id="cc-btn-cancel-pwd">Annuler</button>
+        <button type="button" class="btn-pill" id="cc-btn-verify-pwd">Déverrouiller</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Edit Player Modal -->
+  <div id="cc-admin-edit-modal" class="moverlay">
+    <div class="mbox" style="max-width:860px; max-height:88dvh; overflow-y:auto;">
+      <h3>Édition du joueur : <span id="cc-edit-player-name"></span></h3>
+      <div id="cc-edit-form-content" class="mt-2"></div>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost" onclick="document.getElementById('cc-admin-edit-modal').classList.remove('active')">Annuler</button>
+        <button type="button" class="btn-pill" id="cc-btn-save-admin-edit">Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Wheel Modal -->
+  <div id="cc-admin-wheel-modal" class="moverlay">
+    <div class="mbox" style="max-width:420px;">
+      <h3>🎡 Gestion de la Roue : <span id="cc-admin-wheel-player-name"></span></h3>
+      <div class="input-group mt-2">
+        <label>Tours restants</label>
+        <input type="number" id="cc-admin-wheel-spins" min="0" max="100">
+      </div>
+      <button type="button" class="btn-ghost btn-sm" id="cc-btn-reset-wheel-timer" style="width:100%;margin-top:6px;">⏳ Reset Timer (0 sec)</button>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost" onclick="document.getElementById('cc-admin-wheel-modal').classList.remove('active')">Annuler</button>
+        <button type="button" class="btn-pill" id="cc-btn-save-admin-wheel">Sauvegarder</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cc-dialog-modal" class="moverlay">
+    <div class="mbox" style="max-width:420px;">
+      <h3 id="cc-dialog-title">Information</h3>
+      <p class="caption mt-1" id="cc-dialog-message" style="font-size:14px; color:var(--ink);white-space:pre-line;"></p>
+      <div class="input-group mt-2 hidden" id="cc-dialog-input-wrap">
+        <input type="text" id="cc-dialog-input" placeholder="">
+      </div>
+      <div class="mact mt-3">
+        <button type="button" class="btn-ghost hidden" id="cc-dialog-cancel">Annuler</button>
+        <button type="button" class="btn-pill" id="cc-dialog-confirm">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script type="module" src="script.js?v=20261112-pdf-layout-fix"></script>
+<script type="module" src="/script.js"></script>
 </body>
 </html>
